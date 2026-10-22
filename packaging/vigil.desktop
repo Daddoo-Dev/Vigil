@@ -1,0 +1,30 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Vigil
+GenericName=Flutter maintenance watchdog
+Comment=Open the latest Vigil maintenance report
+Exec=@VIGIL@ open
+Icon=vigil
+Terminal=false
+Categories=Development;Utility;
+Keywords=flutter;maintenance;scan;report;
+StartupNotify=false
+X-GNOME-UsesNotifications=true
+Actions=scan;review;tray;folder;
+
+[Desktop Action scan]
+Name=Run scan
+Exec=@VIGIL@ scan
+
+[Desktop Action review]
+Name=Review proposals
+Exec=@VIGIL@ review
+
+[Desktop Action tray]
+Name=Show tray icon
+Exec=@VIGIL@ tray
+
+[Desktop Action folder]
+Name=Open reports folder
+Exec=@VIGIL@ open --folder

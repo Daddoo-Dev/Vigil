@@ -1,0 +1,33 @@
+# Hand-approved requirements. The scanner never writes this file from the network.
+# Only `vigil review` changes it, and that rewrite drops these comments.
+#
+# The values below are a snapshot of public pages on 2026-10-21, copied once
+# by `vigil init`. Confirm them. `last_verified` stays empty until a review
+# finishes with nothing left pending.
+#
+# - Play: new apps and updates target API 36 as of 2026-08-31
+#   https://developer.android.com/google/play/requirements/target-sdk
+# - App Store: Xcode 26 since 2026-04-28, iOS 13 since 2026-09-09
+#   https://developer.apple.com/news/upcoming-requirements/
+# - Flutter stable 3.47.7 from releases_linux.json on 2026-10-21
+
+android:
+  target_api_min:
+    value: 36
+    deadline: "2026-08-31"
+    source: https://developer.android.com/google/play/requirements/target-sdk
+
+ios:
+  min_xcode:
+    value: "26"
+    deadline: "2026-04-28"
+    source: https://developer.apple.com/news/upcoming-requirements/
+  min_deployment_target:
+    value: "13.0"
+    deadline: "2026-09-09"
+    source: https://developer.apple.com/news/upcoming-requirements/
+
+flutter:
+  recommended_stable:
+    value: "3.47.7"
+    source: https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json

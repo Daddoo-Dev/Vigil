@@ -1,0 +1,8 @@
+// compileSdk 99
+android {
+    compileSdkVersion flutter.compileSdkVersion
+    defaultConfig {
+        minSdkVersion flutter.minSdkVersion
+        targetSdkVersion flutter.targetSdkVersion
+    }
+}

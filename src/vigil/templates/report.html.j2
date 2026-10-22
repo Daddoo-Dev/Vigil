@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Vigil {{ generated[:10] }}</title>
+<style>
+body { margin: 0; background: #f4f5f6; color: #1c1c1c; font: 16px/1.45 sans-serif; }
+main { max-width: 980px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { margin: 0 0 8px; font-size: 28px; }
+h2 { margin: 28px 0 8px; font-size: 20px; }
+h3 { margin: 16px 0 6px; font-size: 16px; }
+a { color: #0b57d0; }
+.banner { padding: 20px 16px; color: #fff; }
+.banner-ok { background: #2e7d32; }
+.banner-action { background: #ef6c00; }
+.banner-degraded { background: #c62828; }
+.banner p { margin: 4px 0; }
+.banner ul { margin: 8px 0 0; padding-left: 18px; }
+.panel { background: #fff; border: 1px solid #e0e0e0; padding: 8px 16px 16px; }
+.priority { color: #555; font-weight: normal; font-size: 13px; }
+.sev-action { color: #b71c1c; }
+.sev-watch { color: #e65100; }
+.sev-info { color: #333; }
+table { width: 100%; border-collapse: collapse; background: #fff; }
+th, td { border: 1px solid #e0e0e0; padding: 6px 8px; text-align: left; vertical-align: top; }
+th { background: #eceff1; }
+.outlier { background: #fff3cd; }
+.quote { margin: 8px 0; }
+.suggestion { color: #333; }
+.fetch-failed, .fetch-unexpected { background: #fdecea; }
+.fetch-ok { background: #fff; }
+.empty { color: #555; }
+.banner .muted { opacity: 0.85; }
+.muted { color: #555; }
+details.awareness { margin-top: 12px; border-top: 1px solid #e0e0e0; padding-top: 8px; }
+details.awareness > summary {
+  cursor: pointer;
+  list-style: none;
+  color: #555;
+  font-weight: 600;
+  padding: 4px 0;
+}
+details.awareness > summary::-webkit-details-marker { display: none; }
+details.awareness > summary::before { content: "▸ "; }
+details.awareness[open] > summary::before { content: "▾ "; }
+</style>
+</head>
+<body>
+<header class="banner banner-{{ state }}">
+  <h1>Vigil</h1>
+  <p>{{ state_label }}</p>
+  <p>Requirements last verified: {{ last_verified }}</p>
+  <p>
+    {{ action_count }} action item{% if action_count != 1 %}s{% endif %}{% if affects_apps %},
+    {{ affects_apps|length }} proposal{% if affects_apps|length != 1 %}s{% endif %} that affect{% if affects_apps|length == 1 %}s{% endif %} your apps{% endif %}{% if worth_knowing %},
+    <span class="muted">{{ worth_knowing|length }} other{% if worth_knowing|length != 1 %}s{% endif %}</span>{% endif %}
+  </p>
+  {% if errors %}
+  <ul>
+    {% for error in errors %}
+    <li>{{ error }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</header>
+<main>
+  <h2>To-do</h2>
+  <div class="panel">
+    {% if todo_groups %}
+      {% for group in todo_groups %}
+      <h3>{{ group.name }} <span class="priority">{{ group.priority }}</span></h3>
+      <ul>
+        {% for line in group.lines %}
+        <li class="sev-{{ line.severity }}">{{ line.message }}</li>
+        {% endfor %}
+      </ul>
+      {% endfor %}
+    {% else %}
+      <p class="empty">No action or watch items.</p>
+    {% endif %}
+  </div>
+
+  <h2>Pending proposals</h2>
+  <div class="panel">
+    {% if affects_apps or worth_knowing %}
+      {% if affects_apps %}
+      <p>{{ affects_apps|length }} that affect your apps. Run <code>vigil review</code>.</p>
+      {% for proposal in affects_apps %}
+      <p class="quote">
+        <a href="{{ proposal.snippet_url }}">{{ proposal.source_id }}</a><br>
+        {{ proposal.quote }}
+        <br><span class="suggestion">suggested: {{ proposal.suggested_field }} = {{ proposal.suggested_value }}</span>
+      </p>
+      {% endfor %}
+      {% else %}
+      <p class="empty">No proposals that change a store or SDK requirement.</p>
+      {% endif %}
+      {% if worth_knowing %}
+      <details class="awareness">
+        <summary>{{ worth_knowing|length }} other proposal{% if worth_knowing|length != 1 %}s{% endif %} worth knowing</summary>
+        {% for proposal in worth_knowing %}
+        <p class="quote">
+          <a href="{{ proposal.snippet_url }}">{{ proposal.source_id }}</a><br>
+          {{ proposal.quote }}
+          {% if proposal.suggested_field %}
+          <br><span class="suggestion">suggested: {{ proposal.suggested_field }}{% if proposal.suggested_value %} = {{ proposal.suggested_value }}{% endif %}</span>
+          {% endif %}
+        </p>
+        {% endfor %}
+      </details>
+      {% endif %}
+    {% else %}
+      <p class="empty">No proposals waiting.</p>
+    {% endif %}
+  </div>
+
+  <h2>Drift</h2>
+  {% if drift.rows %}
+  <table>
+    <thead>
+      <tr>
+        <th>App</th>
+        {% for column in drift.columns %}
+        <th>{{ column }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in drift.rows %}
+      <tr>
+        <td>{{ row.name }}</td>
+        {% for cell in row.cells %}
+        <td class="{% if cell.outlier %}outlier{% endif %}">{{ cell.text }}</td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No repos scanned.</p>
+  {% endif %}
+
+  <h2>Package health</h2>
+  <div class="panel">
+    {% if packages %}
+    <ul>
+      {% for line in packages %}
+      <li class="sev-{{ line.severity }}">{{ line.message }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty">No discontinued, retracted, or outdated direct packages recorded.</p>
+    {% endif %}
+  </div>
+
+  <h2>Expiries</h2>
+  <div class="panel">
+    {% if expiries %}
+    <ul>
+      {% for line in expiries %}
+      <li class="sev-{{ line.severity }}">{{ line.message }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty">No expiries listed.</p>
+    {% endif %}
+  </div>
+
+  <h2>Source fetch log</h2>
+  <table>
+    <thead>
+      <tr><th>Source</th><th>Status</th><th>Detail</th></tr>
+    </thead>
+    <tbody>
+      {% for row in fetches %}
+      <tr class="fetch-{{ row.status }}">
+        <td>{{ row.name }}</td>
+        <td>{{ row.status }}</td>
+        <td>{{ row.detail }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="3">No sources configured.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="empty">Generated {{ generated }}. Dependabot and Sentry are not queried.</p>
+</main>
+</body>
+</html>

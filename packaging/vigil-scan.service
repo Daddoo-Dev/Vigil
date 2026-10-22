@@ -1,0 +1,6 @@
+[Unit]
+Description=Vigil maintenance scan
+
+[Service]
+Type=oneshot
+ExecStart=@VIGIL@ scan

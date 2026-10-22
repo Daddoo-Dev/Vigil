@@ -1,0 +1,5 @@
+Weather looks fine this week.
+
+Starting August 31, 2026, new apps and app updates must target API level 36 to be submitted.
+
+The picnic is still on for Saturday afternoon in the park.

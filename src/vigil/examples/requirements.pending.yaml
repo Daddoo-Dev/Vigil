@@ -1,0 +1,3 @@
+# Proposals produced by scans. Accept or dismiss them with `vigil review`.
+# Vigil does not copy these into requirements.yaml on its own.
+proposals: []

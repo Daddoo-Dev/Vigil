@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Vigil Tray
+Comment=Vigil status icon in the top bar
+Exec=@VIGIL@ tray
+Icon=vigil
+Terminal=false
+Categories=Utility;
+X-GNOME-Autostart-enabled=true
+NoDisplay=true

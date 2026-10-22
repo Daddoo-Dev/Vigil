@@ -1,0 +1,76 @@
+# Sources checked on each scan. A fetch only creates proposals; it never edits
+# requirements.yaml. keywords: an empty list uses the built-in phrases
+# (target api level, targetSdk, api level, Xcode, SDK, "must be built with",
+# deadline, required, minimum, deprecat, and "starting <month>").
+#
+# URLs checked 2026-10-21:
+# - Apple news RSS returns 200, content-type application/rss+xml.
+# - Apple upcoming requirements returns 200 HTML.
+# - https://android-developers.googleblog.com/feeds/posts/default returns 302 to
+#   the Android developers atom feed below, which returns 200 text/xml.
+# - The Play Console help article returns 404 to HEAD and 200 to GET, and the
+#   body contains the target API text. Vigil always uses GET.
+# - The Android developers target-sdk page returns 200 HTML with the same policy.
+# - Flutter releases_linux.json returns 200. Stable on that date was 3.47.7.
+# - Flutter and Dart GitHub release feeds return 200 Atom. They are fetched as
+#   type rss; feedparser reads both RSS and Atom.
+
+sources:
+  - id: apple-news
+    name: Apple Developer News
+    type: rss
+    url: https://developer.apple.com/news/rss/news.rss
+    keywords: &phrases
+      - target api level
+      - targetSdk
+      - api level
+      - Xcode
+      - SDK
+      - must be built with
+      - deadline
+      - required
+      - minimum
+      - deprecat
+      - starting-month
+
+  - id: apple-upcoming
+    name: Apple Upcoming Requirements
+    type: html
+    url: https://developer.apple.com/news/upcoming-requirements/
+    keywords: *phrases
+
+  - id: android-blog
+    name: Android Developers Blog
+    type: rss
+    url: https://developer.android.com/static/blog/atom.xml
+    keywords: *phrases
+
+  - id: play-target-api
+    name: Google Play target API level
+    type: html
+    url: https://support.google.com/googleplay/android-developer/answer/11926878
+    keywords: *phrases
+
+  - id: play-target-api-docs
+    name: Android docs target API level
+    type: html
+    url: https://developer.android.com/google/play/requirements/target-sdk
+    keywords: *phrases
+
+  - id: flutter-stable
+    name: Flutter stable releases
+    type: json
+    url: https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json
+    keywords: *phrases
+
+  - id: flutter-releases
+    name: Flutter GitHub releases
+    type: rss
+    url: https://github.com/flutter/flutter/releases.atom
+    keywords: *phrases
+
+  - id: dart-releases
+    name: Dart SDK GitHub releases
+    type: rss
+    url: https://github.com/dart-lang/sdk/releases.atom
+    keywords: *phrases

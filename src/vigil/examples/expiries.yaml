@@ -1,0 +1,7 @@
+# Hand-edited expiry dates. Vigil never writes this file.
+# Warnings start at 60 days. Urgent (action) at 14 days, and after the date.
+expiries: []
+# - app: my_app
+#   item: Apple distribution certificate
+#   expires: "2027-03-01"
+#   notes: Renew in the Apple Developer portal

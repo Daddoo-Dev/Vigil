@@ -1,0 +1,29 @@
+{
+  "package_dependencies": [
+    {
+      "package": "http",
+      "kind": "direct",
+      "isDiscontinued": false,
+      "isCurrentRetracted": false,
+      "isCurrentAffectedByAdvisory": false,
+      "current": {"version": "1.2.0"},
+      "upgradable": {"version": "1.2.2"},
+      "resolvable": {"version": "1.2.2"},
+      "latest": {"version": "1.2.2"}
+    },
+    {
+      "package": "old_tool",
+      "kind": "direct",
+      "isDiscontinued": true,
+      "isCurrentRetracted": true,
+      "current": {"version": "1.4.0"},
+      "latest": {"version": "3.0.0"}
+    },
+    {
+      "package": "transitive_one",
+      "kind": "transitive",
+      "current": {"version": "0.1.0"},
+      "latest": {"version": "0.2.0"}
+    }
+  ]
+}

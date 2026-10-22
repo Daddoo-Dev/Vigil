@@ -1,0 +1,7 @@
+# Written by `vigil projects`. Run that command again to change the list.
+# Priority only changes the order of the report.
+repos: []
+# - name: my_app
+#   path: /home/you/src/my_app
+#   platforms: [android, ios]
+#   priority: high

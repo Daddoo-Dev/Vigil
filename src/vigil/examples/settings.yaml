@@ -1,0 +1,10 @@
+# Folder Vigil scans for Flutter projects. `vigil projects` asks for this
+# when it is empty, then shows a checklist.
+# projects_dir: /home/you/projects
+
+# Desktop notification after a scan when the status is not ok.
+notify: true
+
+# Extractor implementation. v1 ships "keyword" only.
+# A later local-LLM extractor can be selected here without changing scanners.
+extractor: keyword
