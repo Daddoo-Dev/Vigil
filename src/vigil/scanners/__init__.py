@@ -1,4 +1,10 @@
-"""Shared scanner types. Importing this package does not run any checks."""
+"""Scanner packs.
+
+Flutter (plus Android / iOS / pub.dev / package outdated checks that a Flutter
+app needs) is the **reference implementation**. Other major frameworks can land
+later as sibling modules that feed the same report and requirements pipeline.
+Importing this package does not run any checks.
+"""
 
 from vigil.scanners.android import AndroidSdk, SdkPin, parse_gradle, read_android
 from vigil.scanners.expiries import Expiry, check_expiries, load_expiries

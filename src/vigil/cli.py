@@ -1,4 +1,4 @@
-"""Command line: init, projects, scan, review, status, open, tray, desktop."""
+"""Command line: setup (default), init, projects, scan, review, status, open, tray, desktop."""
 
 from __future__ import annotations
 
@@ -9,22 +9,25 @@ from datetime import date
 from pathlib import Path
 
 from vigil.config import Paths, configure_logging, init_config
-from vigil.desktop import (
-    install_desktop_files,
-    install_user_units,
-    open_latest_report,
-    open_reports_folder,
-)
+from vigil.desktop import install_desktop_integration, open_latest_report, open_reports_folder
 from vigil.projects import run_projects
 from vigil.review import run_review
 from vigil.scan import run_scan
+from vigil.setup import needs_setup, run_setup
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="vigil")
+    parser = argparse.ArgumentParser(
+        prog="vigil",
+        description="Personal maintenance watchdog for published Flutter apps.",
+    )
     parser.add_argument("--verbose", action="store_true", help="also log to the terminal")
-    commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("init", help="create config directories and example files")
+    commands = parser.add_subparsers(dest="command", required=False)
+    commands.add_parser(
+        "setup",
+        help="first-run wizard: config, pick projects, optional scan (default if no command)",
+    )
+    commands.add_parser("init", help="create config directories and example files only")
     projects = commands.add_parser("projects", help="choose which projects in a folder to monitor")
     projects.add_argument("--dir", type=Path, help="folder to scan instead of the saved one")
     commands.add_parser("scan", help="scan repos and sources, then write a report")
@@ -43,39 +46,57 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     paths = Paths.from_env()
-    if args.command == "init":
+    command = args.command
+    if command is None:
+        command = "setup" if needs_setup(paths) else "status"
+
+    if command == "init":
         init_config(paths)
-        _install_desktop(quiet=False)
-        if sys.stdin.isatty() and sys.stdout.isatty():
-            return run_projects(paths)
-        print("Run `vigil projects` and point it at the folder where you keep projects.")
-        return 0
+        return install_desktop_integration(quiet=False)
+    if command == "setup":
+        try:
+            configure_logging(paths.state_dir, args.verbose)
+            return run_setup(paths)
+        except KeyboardInterrupt:
+            return 130
+        except Exception:
+            import logging
+
+            logging.getLogger("vigil").exception("internal error")
+            print(
+                "Vigil crashed. Details are in the log under the state directory.",
+                file=sys.stderr,
+            )
+            return 1
     try:
         configure_logging(paths.state_dir, args.verbose)
-        if args.command == "projects":
+        if command == "projects":
             return run_projects(paths, args.dir)
-        if args.command == "scan":
+        if command == "scan":
             run_scan(paths)
             return 0
-        if args.command == "review":
+        if command == "review":
             try:
                 run_review(paths, date.today())
             except EOFError:
                 print("\nReview stopped. Decisions already entered were saved.")
             return 0
-        if args.command == "status":
+        if command == "status":
+            if needs_setup(paths) and not paths.status_path.is_file():
+                print("Vigil is not set up yet. Run: vigil setup")
+                return 0
             print_status(paths)
             return 0
-        if args.command == "open":
+        if command == "open":
             if args.folder:
                 return open_reports_folder(paths)
             return open_latest_report(paths)
-        if args.command == "tray":
+        if command == "tray":
             from vigil.tray import run_tray
 
             return run_tray(paths)
-        if args.command == "desktop":
-            return _install_desktop(quiet=False)
+        if command == "desktop":
+            return install_desktop_integration(quiet=False)
     except KeyboardInterrupt:
         return 130
     except Exception:
@@ -85,20 +106,6 @@ def main(argv: list[str] | None = None) -> int:
         print("Vigil crashed. Details are in the log under the state directory.", file=sys.stderr)
         return 1
     return 1
-
-
-def _install_desktop(*, quiet: bool) -> int:
-    installed = install_desktop_files()
-    units = install_user_units()
-    if quiet:
-        return 0
-    print(f"apps launcher: {installed['app']}")
-    print(f"tray autostart: {installed['tray']}")
-    for unit in units:
-        print(f"systemd: {unit}")
-    print("Search for Vigil in the apps grid to open the latest report.")
-    print("Log out and back in once so the tray starts, or run: vigil tray")
-    return 0
 
 
 def print_status(paths: Paths) -> None:

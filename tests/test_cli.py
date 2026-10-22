@@ -5,7 +5,8 @@ from vigil.config import ConfigError, load_repos, load_sources
 from vigil.scanners.flutter import parse_fvm_version, read_flutter
 
 
-def test_init_is_idempotent_and_ships_checked_sources(paths, capsys):
+def test_init_is_idempotent_and_ships_checked_sources(paths, capsys, monkeypatch):
+    monkeypatch.setattr("vigil.cli.install_desktop_integration", lambda quiet=False: 0)
     assert main(["init"]) == 0
     sources = load_sources(paths.config_dir / "sources.yaml")
     by_id = {source.id: source for source in sources}

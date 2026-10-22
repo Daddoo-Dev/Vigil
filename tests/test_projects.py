@@ -142,7 +142,7 @@ def test_folder_list_starts_on_a_child_not_the_scan_action(tmp_path: Path):
 def test_space_stops_at_the_highlighted_folder_and_enter_opens_it(tmp_path: Path):
     projects = tmp_path / "github"
     projects.mkdir()
-    (projects / "craterfall").mkdir()
+    (projects / "game_app").mkdir()
     from vigil.folders import activate, folder_rows, opening_cursor
 
     rows = folder_rows(tmp_path)
@@ -153,7 +153,7 @@ def test_space_stops_at_the_highlighted_folder_and_enter_opens_it(tmp_path: Path
     opened, next_cursor, chosen = activate(tmp_path, cursor, choose=False)
     assert chosen is None
     assert opened == projects
-    assert folder_rows(opened)[next_cursor].label == "craterfall/"
+    assert folder_rows(opened)[next_cursor].label == "game_app/"
     assert opening_cursor(folder_rows(opened)) == next_cursor
 
 

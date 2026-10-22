@@ -20,7 +20,7 @@ def resolve_folder(raw: str, *, cwd: Path, home: Path) -> Path | None:
 
     Accepts ``~``, backslashes, and a different capitalisation. A relative path
     is tried from the current directory and then from the home directory, so
-    ``documents\\github`` still finds ``~/Documents/github``.
+    ``documents\\code`` still finds ``~/Documents/code``.
     """
     text = raw.strip().strip("\"'").replace("\\", "/")
     if not text:

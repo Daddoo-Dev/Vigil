@@ -1,10 +1,13 @@
-"""Desktop integration: apps launcher, icon, and notifications that open the report."""
+"""Desktop integration: apps launcher, icon, and Linux notification waiter.
+
+Apps-grid ``.desktop`` files and systemd user units are Linux-only. Tray and
+notify backends for every host live in :mod:`vigil.tray` and :mod:`vigil.notify`.
+"""
 
 from __future__ import annotations
 
 import json
 import logging
-import os
 import shutil
 import subprocess
 import sys
@@ -13,6 +16,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from vigil.config import Paths
+from vigil.host import default_path_roots, open_path, supports_linux_desktop_files
 
 logger = logging.getLogger("vigil.desktop")
 
@@ -21,17 +25,11 @@ _ICON_SIZES = (16, 32, 48, 64, 128, 256)
 
 
 def data_home() -> Path:
-    override = os.environ.get("XDG_DATA_HOME")
-    if override:
-        return Path(override)
-    return Path.home() / ".local" / "share"
+    return default_path_roots().data
 
 
 def config_home() -> Path:
-    override = os.environ.get("XDG_CONFIG_HOME")
-    if override:
-        return Path(override)
-    return Path.home() / ".config"
+    return default_path_roots().config
 
 
 def applications_dir() -> Path:
@@ -71,15 +69,6 @@ def latest_report(paths: Paths) -> Path | None:
     if link.exists():
         return link.resolve() if link.is_symlink() else link
     return None
-
-
-def open_path(target: Path) -> int:
-    try:
-        subprocess.Popen(["xdg-open", str(target)], start_new_session=True)
-    except OSError as exc:
-        print(f"Could not open {target}: {exc}", file=sys.stderr)
-        return 1
-    return 0
 
 
 def open_latest_report(paths: Paths) -> int:
@@ -174,8 +163,45 @@ def tray_desktop_text(binary: str) -> str:
     )
 
 
+def install_desktop_integration(*, quiet: bool = False) -> int:
+    """Install host desktop hooks for Linux, Windows, or macOS."""
+    from vigil.host import system_name
+
+    name = system_name()
+    if name == "windows":
+        from vigil.windows_desktop import install_windows_integration
+
+        return install_windows_integration(quiet=quiet)
+    if name == "darwin":
+        from vigil.macos_desktop import install_macos_integration
+
+        return install_macos_integration(quiet=quiet)
+    if not supports_linux_desktop_files():
+        if not quiet:
+            print(f"No desktop-file installer for this host ({name}).")
+            print("Run `vigil tray` for the status icon and `vigil open` for the report.")
+            print("Fallback if `vigil` is not on PATH: python -m vigil setup")
+        return 0
+    installed = install_desktop_files()
+    units = install_user_units()
+    if quiet:
+        return 0
+    print(f"apps launcher: {installed['app']}")
+    print(f"tray autostart: {installed['tray']}")
+    for unit in units:
+        print(f"systemd: {unit}")
+    print("Search for Vigil in the apps grid to open the latest report.")
+    print("Log out and back in once so the tray starts, or run: vigil tray")
+    return 0
+
+
 def install_desktop_files(binary: str | None = None) -> dict[str, Path]:
-    """Install the apps-grid launcher, tray autostart entry, and icons."""
+    """Install the apps-grid launcher, tray autostart entry, and icons (Linux)."""
+    if not supports_linux_desktop_files():
+        raise RuntimeError(
+            "Apps-grid desktop files are only installed on Linux. "
+            "On macOS or Windows, run `vigil tray` and `vigil open` instead."
+        )
     command = binary or vigil_binary()
     applications = applications_dir()
     autostart = autostart_dir()
@@ -238,21 +264,6 @@ def install_user_units() -> list[Path]:
         capture_output=True,
     )
     return [service, timer]
-
-
-def notify_scan_result(message: str, report: Path | None) -> None:
-    """Show a notification that stays in the clock menu and can open the report."""
-    if shutil.which("notify-send") is None:
-        logger.warning("notify-send is not installed; skipped desktop notification")
-        return
-    report_arg = str(report) if report and report.exists() else ""
-    subprocess.Popen(
-        [sys.executable, "-m", "vigil.desktop", "wait-notify", message, report_arg],
-        start_new_session=True,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
 
 
 def wait_for_notification_action(message: str, report: Path | None) -> int:

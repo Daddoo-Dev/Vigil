@@ -16,7 +16,8 @@ def test_icons_are_distinct_solid_circles():
 def test_tooltip_and_backend_message():
     assert "no scan yet" in tooltip(None)
     assert "degraded" in tooltip({"state": "degraded", "action_count": 1})
-    message = backend_help()
+    message = backend_help("linux")
     assert "python3-gobject" in message
     assert "libappindicator-gtk3" in message
     assert "gnome-shell-extension-appindicator" in message
+    assert "pystray" in backend_help("windows")

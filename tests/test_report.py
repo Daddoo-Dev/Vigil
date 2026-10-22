@@ -118,11 +118,11 @@ def test_report_shows_affecting_proposals_and_collapses_the_rest():
             ],
             todo_groups=[
                 {
-                    "name": "yetimatch",
+                    "name": "sample_app",
                     "priority": "normal",
                     "lines": [
-                        {"severity": "action", "message": "yetimatch: target SDK 34 is below Play minimum 36"},
-                        {"severity": "action", "message": "yetimatch: Flutter pin is behind recommended stable"},
+                        {"severity": "action", "message": "sample_app: target SDK 34 is below Play minimum 36"},
+                        {"severity": "action", "message": "sample_app: Flutter pin is behind recommended stable"},
                     ],
                 }
             ],
@@ -136,6 +136,6 @@ def test_report_shows_affecting_proposals_and_collapses_the_rest():
     assert "<details class=\"awareness\">" in html
     assert "1 other proposal worth knowing" in html
     assert "iPhone Duo" in html
-    assert "yetimatch: target SDK 34 is below Play minimum 36" in html
-    assert "yetimatch: Flutter pin is behind recommended stable" in html
+    assert "sample_app: target SDK 34 is below Play minimum 36" in html
+    assert "sample_app: Flutter pin is behind recommended stable" in html
     assert "<script" not in html

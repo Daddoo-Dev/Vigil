@@ -36,27 +36,10 @@ else
 fi
 echo "using $VIGIL_BIN"
 
-"$VIGIL_BIN" init
-"$VIGIL_BIN" desktop
-
 mkdir -p "$UNIT_DIR" "$AUTOSTART_DIR" "$APPLICATIONS_DIR"
-sed "s|@VIGIL@|${VIGIL_BIN}|g" "$ROOT/packaging/vigil-scan.service" > "$UNIT_DIR/vigil-scan.service"
-cp "$ROOT/packaging/vigil-scan.timer" "$UNIT_DIR/vigil-scan.timer"
-sed "s|@VIGIL@|${VIGIL_BIN}|g" "$ROOT/packaging/vigil.desktop" > "$APPLICATIONS_DIR/vigil.desktop"
-sed "s|@VIGIL@|${VIGIL_BIN}|g" "$ROOT/packaging/vigil-tray.desktop" > "$AUTOSTART_DIR/vigil-tray.desktop"
-echo "installed systemd user units in $UNIT_DIR"
-echo "installed apps launcher $APPLICATIONS_DIR/vigil.desktop"
-echo "installed tray autostart $AUTOSTART_DIR/vigil-tray.desktop"
 
-systemctl --user daemon-reload
-systemctl --user enable --now vigil-scan.timer
-echo "enabled vigil-scan.timer"
-
-if command -v update-desktop-database >/dev/null 2>&1; then
-  update-desktop-database "$APPLICATIONS_DIR" >/dev/null 2>&1 || true
-fi
-
-echo "done."
-echo "Search for Vigil in the apps grid to open the latest report."
-echo "For the top-bar icon: sudo dnf install gnome-shell-extension-appindicator"
-echo "Then log out and back in, or run: vigil tray"
+echo "done installing $VIGIL_BIN"
+echo "Next: run the first-run wizard"
+echo "  vigil setup"
+echo "(Or just: vigil)"
+echo "That creates config, lets you pick projects, and can run the first scan."

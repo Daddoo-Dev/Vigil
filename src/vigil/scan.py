@@ -554,10 +554,10 @@ def _notify(settings: Settings, status: dict, notify_fn) -> None:
     if notify_fn is not None:
         notify_fn(message)
         return
-    from vigil.desktop import notify_scan_result
+    from vigil.notify import get_notifier
 
     report = Path(str(status["report_path"])) if status.get("report_path") else None
-    notify_scan_result(message, report)
+    get_notifier().notify("Vigil", message, report=report)
 
 
 def external_alert_counts() -> dict[str, int]:

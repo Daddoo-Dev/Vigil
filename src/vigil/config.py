@@ -1,4 +1,4 @@
-"""Paths and YAML config. Data lives in XDG directories, overridable for tests."""
+"""Paths and YAML config. Data lives in per-user host directories, overridable for tests."""
 
 from __future__ import annotations
 
@@ -10,6 +10,8 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 import yaml
+
+from vigil.host import default_path_roots
 
 logger = logging.getLogger("vigil.config")
 
@@ -51,15 +53,18 @@ class Paths:
 
     @classmethod
     def from_env(cls) -> Paths:
-        home = Path.home()
-        config_root = Path(os.environ.get("XDG_CONFIG_HOME", home / ".config"))
-        state_root = Path(os.environ.get("XDG_STATE_HOME", home / ".local" / "state"))
-        data_root = Path(os.environ.get("XDG_DATA_HOME", home / ".local" / "share"))
+        """Resolve config, state, and reports dirs for this host.
+
+        Order: ``VIGIL_*`` env vars, then platform defaults from
+        :func:`vigil.host.default_path_roots` (XDG on Linux, Application
+        Support / Caches on macOS, AppData on Windows).
+        """
+        roots = default_path_roots()
         return cls(
-            config_dir=Path(os.environ.get("VIGIL_CONFIG_DIR", config_root / "vigil")),
-            state_dir=Path(os.environ.get("VIGIL_STATE_DIR", state_root / "vigil")),
+            config_dir=Path(os.environ.get("VIGIL_CONFIG_DIR", roots.config / "vigil")),
+            state_dir=Path(os.environ.get("VIGIL_STATE_DIR", roots.state / "vigil")),
             reports_dir=Path(
-                os.environ.get("VIGIL_REPORTS_DIR", data_root / "vigil" / "reports")
+                os.environ.get("VIGIL_REPORTS_DIR", roots.data / "vigil" / "reports")
             ),
         )
 

@@ -414,11 +414,11 @@ def test_progress_rewrites_the_same_line_on_a_terminal():
     stream = _Line(True)
     progress = TerminalProgress(stream)
     progress("Checking Apple Developer News (1 of 8)")
-    progress("Scanning yetimatch (4 of 10 projects)")
+    progress("Scanning sample_app (4 of 10 projects)")
     progress.finish()
     text = "".join(stream.parts)
     assert text.startswith("\rChecking Apple Developer News (1 of 8)")
-    assert "\rScanning yetimatch (4 of 10 projects)" in text
+    assert "\rScanning sample_app (4 of 10 projects)" in text
     assert text.endswith("\n")
     assert "\nScanning" not in text
 
@@ -431,8 +431,8 @@ def test_scan_names_each_project_as_it_goes(paths, tmp_path):
         paths.config_dir / "repos.yaml",
         {
             "repos": [
-                {"name": "adorate", "path": str(first), "platforms": ["android", "ios"], "priority": "normal"},
-                {"name": "yetimatch", "path": str(second), "platforms": ["android", "ios"], "priority": "normal"},
+                {"name": "alpha", "path": str(first), "platforms": ["android", "ios"], "priority": "normal"},
+                {"name": "beta", "path": str(second), "platforms": ["android", "ios"], "priority": "normal"},
             ]
         },
     )
@@ -454,6 +454,6 @@ def test_scan_names_each_project_as_it_goes(paths, tmp_path):
     )
     assert seen == [
         "Checking Flutter stable releases (1 of 1)",
-        "Scanning adorate (1 of 2 projects)",
-        "Scanning yetimatch (2 of 2 projects)",
+        "Scanning alpha (1 of 2 projects)",
+        "Scanning beta (2 of 2 projects)",
     ]

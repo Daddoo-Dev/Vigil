@@ -4,7 +4,6 @@ from vigil.desktop import (
     app_desktop_text,
     install_desktop_files,
     latest_report,
-    notify_scan_result,
     tray_desktop_text,
     write_icon,
 )
@@ -59,28 +58,7 @@ def test_write_icon_is_a_png(tmp_path):
 
 
 def test_backend_help_mentions_fedora_packages():
-    message = backend_help()
+    message = backend_help("linux")
     assert "gnome-shell-extension-appindicator" in message
     assert "vigil open" in message
-
-
-def test_notify_spawns_waiter_without_blocking(paths, monkeypatch, tmp_path):
-    report = tmp_path / "report.html"
-    report.write_text("ok", encoding="utf-8")
-    calls: list[list[str]] = []
-
-    def fake_popen(command, **_kwargs):
-        calls.append(list(command))
-
-        class _Proc:
-            pass
-
-        return _Proc()
-
-    monkeypatch.setattr("vigil.desktop.shutil.which", lambda name: "/usr/bin/notify-send" if name == "notify-send" else None)
-    monkeypatch.setattr("vigil.desktop.subprocess.Popen", fake_popen)
-    notify_scan_result("Vigil: 3 maintenance actions", report)
-    assert len(calls) == 1
-    assert calls[0][-2] == "Vigil: 3 maintenance actions"
-    assert calls[0][-1] == str(report)
-    assert "wait-notify" in calls[0]
+    assert "pystray" in backend_help("darwin")
