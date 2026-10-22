@@ -35,10 +35,14 @@ def test_degraded_report_shows_the_failure_and_the_verified_date():
                 {
                     "name": "Sample",
                     "priority": "high",
+                    "action_count": 1,
+                    "watch_count": 0,
+                    "anchor": "sample",
                     "lines": [
                         {
                             "severity": "action",
                             "message": "Sample: target SDK 34 is below Play minimum 35, due in 41 days",
+                            "text": "target SDK 34 is below Play minimum 35, due in 41 days",
                         }
                     ],
                 }
@@ -46,9 +50,11 @@ def test_degraded_report_shows_the_failure_and_the_verified_date():
         )
     )
     assert 'class="banner banner-degraded"' in html
-    assert "Requirements last verified: 2026-09-01" in html
+    assert "Requirements verified" in html
+    assert "2026-09-01" in html
     assert "Apple Upcoming Requirements: failed (HTTP 503)" in html
     assert "target SDK 34 is below Play minimum 35, due in 41 days" in html
+    assert 'href="#sample"' in html
     assert "<script" not in html
 
 
@@ -120,22 +126,58 @@ def test_report_shows_affecting_proposals_and_collapses_the_rest():
                 {
                     "name": "sample_app",
                     "priority": "normal",
+                    "action_count": 2,
+                    "watch_count": 0,
+                    "anchor": "sample-app",
                     "lines": [
-                        {"severity": "action", "message": "sample_app: target SDK 34 is below Play minimum 36"},
-                        {"severity": "action", "message": "sample_app: Flutter pin is behind recommended stable"},
+                        {
+                            "severity": "action",
+                            "message": "sample_app: target SDK 34 is below Play minimum 36",
+                            "text": "target SDK 34 is below Play minimum 36",
+                        },
+                        {
+                            "severity": "action",
+                            "message": "sample_app: Flutter pin is behind recommended stable",
+                            "text": "Flutter pin is behind recommended stable",
+                        },
                     ],
                 }
             ],
         )
     )
-    assert "2 action items" in html
-    assert "1 proposal that affects your apps" in html
-    assert "1 other" in html
+    assert ">Actions</span>2<" in html.replace("\n", "") or "Actions</span>2" in html
+    assert "Affecting proposals" in html
+    assert "Other proposals" in html
     assert "suggested: android.target_api_min = 36" in html
     assert "Apps must target API level 36" in html
-    assert "<details class=\"awareness\">" in html
+    assert '<details class="proposals">' in html
+    assert "collapsed" in html
+    assert html.index("<h2>To-do</h2>") < html.index('<details class="proposals">')
+    assert html.index("<h2>Drift</h2>") < html.index('<details class="proposals">')
+    assert html.index("<h2>Package health</h2>") < html.index('<details class="proposals">')
+    assert '<details class="awareness">' in html
     assert "1 other proposal worth knowing" in html
     assert "iPhone Duo" in html
-    assert "sample_app: target SDK 34 is below Play minimum 36" in html
-    assert "sample_app: Flutter pin is behind recommended stable" in html
+    assert "target SDK 34 is below Play minimum 36" in html
+    assert "Flutter pin is behind recommended stable" in html
+    assert 'href="#sample-app"' in html
     assert "<script" not in html
+
+
+def test_todo_groups_add_anchors_and_short_text():
+    from vigil.report import todo_groups
+    from vigil.requirements import Finding
+
+    groups = todo_groups(
+        [
+            Finding("action", "PeekPersonalFinance: flutter_gemma is discontinued", "PeekPersonalFinance"),
+            Finding("watch", "PeekPersonalFinance: cupertino_icons is a major behind", "PeekPersonalFinance"),
+            Finding("watch", "alpha: no Flutter version pin", "alpha"),
+        ]
+    )
+    assert groups[0]["name"] == "PeekPersonalFinance"
+    assert groups[0]["action_count"] == 1
+    assert groups[0]["watch_count"] == 1
+    assert groups[0]["anchor"] == "peekpersonalfinance"
+    assert groups[0]["lines"][0]["text"] == "flutter_gemma is discontinued"
+    assert groups[1]["name"] == "alpha"

@@ -59,15 +59,41 @@ def todo_groups(findings: list[Finding]) -> list[dict]:
     for name, lines in buckets.items():
         lines.sort(key=lambda finding: (0 if finding.severity == "action" else 1, finding.message))
         priority = min(lines, key=lambda finding: _PRIORITY.get(finding.priority, 1)).priority
+        prefix = f"{name}: "
+        rendered = []
+        for line in lines:
+            text = line.message
+            if text.startswith(prefix):
+                text = text[len(prefix) :]
+            rendered.append({"severity": line.severity, "message": line.message, "text": text})
+        action_n = sum(1 for line in lines if line.severity == "action")
+        watch_n = sum(1 for line in lines if line.severity == "watch")
         groups.append(
             {
                 "name": name,
                 "priority": priority,
-                "lines": [{"severity": line.severity, "message": line.message} for line in lines],
+                "action_count": action_n,
+                "watch_count": watch_n,
+                "anchor": _anchor(name),
+                "lines": rendered,
             }
         )
-    groups.sort(key=lambda group: (0 if group["name"] == "General" else 1, _PRIORITY.get(group["priority"], 1), group["name"]))
+    groups.sort(
+        key=lambda group: (
+            0 if group["action_count"] else 1,
+            0 if group["name"] == "General" else 1,
+            _PRIORITY.get(group["priority"], 1),
+            group["name"].casefold(),
+        )
+    )
     return groups
+
+
+def _anchor(name: str) -> str:
+    cleaned = "".join(ch.lower() if ch.isalnum() else "-" for ch in name)
+    while "--" in cleaned:
+        cleaned = cleaned.replace("--", "-")
+    return cleaned.strip("-") or "app"
 
 
 def proposal_affects_apps(proposal: dict) -> bool:

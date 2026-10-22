@@ -16,7 +16,7 @@ If `vigil` is not on your PATH yet, `python -m vigil â€¦` (or `py -3 -m vigil â€
 
 ```bash
 sudo dnf install python3 pipx python3-gobject libappindicator-gtk3 gnome-shell-extension-appindicator
-git clone https://github.com/shawnmcpeek/vigil.git && cd vigil
+git clone https://github.com/Daddoo-Dev/Vigil.git && cd vigil
 ./packaging/install.sh
 ```
 
@@ -24,7 +24,7 @@ git clone https://github.com/shawnmcpeek/vigil.git && cd vigil
 
 ```bash
 sudo apt install python3 python3-venv python3-gi gir1.2-ayatanaappindicator3-0.1 libnotify-bin
-git clone https://github.com/shawnmcpeek/vigil.git && cd vigil
+git clone https://github.com/Daddoo-Dev/Vigil.git && cd vigil
 ./packaging/install.sh
 ```
 
@@ -33,7 +33,7 @@ If `vigil` is missing after install, add `~/.local/bin` to your `PATH` and open 
 **Windows:**
 
 1. Install [Python 3.11+](https://www.python.org/downloads/) and tick **Add python.exe to PATH**.
-2. Clone `https://github.com/shawnmcpeek/vigil.git` (or download the ZIP and unpack it).
+2. Clone `https://github.com/Daddoo-Dev/Vigil.git` (or download the ZIP and unpack it).
 3. Double-click `packaging\install.bat`  
    or in PowerShell from the repo root:
 
@@ -54,12 +54,12 @@ powershell -ExecutionPolicy Bypass -File .\packaging\install.ps1 -Setup
 **macOS** (no App Store build; local unsigned install):
 
 1. Install Python 3.11+ ([python.org](https://www.python.org/downloads/) or `brew install python`).
-2. Clone `https://github.com/shawnmcpeek/vigil.git` (or download the ZIP).
+2. Clone `https://github.com/Daddoo-Dev/Vigil.git` (or download the ZIP).
 3. Double-click `packaging/install.command`  
    or in Terminal:
 
 ```bash
-git clone https://github.com/shawnmcpeek/vigil.git && cd vigil
+git clone https://github.com/Daddoo-Dev/Vigil.git && cd vigil
 chmod +x packaging/install.command packaging/install-macos.sh
 ./packaging/install-macos.sh
 # or jump into the wizard:

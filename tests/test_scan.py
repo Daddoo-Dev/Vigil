@@ -143,7 +143,8 @@ def test_clean_scan_is_ok_and_names_the_verified_date(paths, tmp_path):
     assert status["action_count"] == 0
     assert notified == []
     report = (paths.reports_dir / "latest.html").read_text(encoding="utf-8")
-    assert "Requirements last verified: never" in report
+    assert "Requirements verified" in report
+    assert "never" in report
     assert "No action or watch items." in report
     assert (paths.reports_dir / "latest.html").is_symlink()
 
@@ -168,7 +169,8 @@ def test_source_failure_is_degraded_and_visible(paths, tmp_path):
     report = Path(status["report_path"]).read_text(encoding="utf-8")
     assert "banner-degraded" in report
     assert "Flutter stable releases: failed (HTTP 503)" in report
-    assert "Requirements last verified: never" in report
+    assert "Requirements verified" in report
+    assert "never" in report
 
 
 def test_changed_page_with_no_keywords_warns_and_keeps_the_old_snapshot(paths, tmp_path):
