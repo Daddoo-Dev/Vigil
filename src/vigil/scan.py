@@ -32,7 +32,6 @@ from vigil.holds import (
     load_holds,
     make_hold,
     ready_holds,
-    reopen_for_recheck,
     save_holds,
     upsert_hold,
 )
@@ -493,21 +492,20 @@ def _holds_phase(
         errors.append(f"holds.yaml: {exc}")
         holds = []
 
+    # Direct + transitive latest so blocked_by wake-ups see companion moves.
     latest_by_package: dict[str, str] = {}
-    major_packages: set[str] = set()
     for scan in scans:
         for row in scan.outdated:
-            if row.kind != "direct" or not row.latest:
+            if not row.latest:
                 continue
             previous = latest_by_package.get(row.name)
             if previous is None or row.latest == previous:
                 latest_by_package[row.name] = row.latest
-            if row.major_behind and row.name in scan.flutter.direct_dependencies:
-                major_packages.add(row.name)
 
+    # Smart recheck: clear Ready/Blocked only when this package's latest moved,
+    # or when a recorded blocked_by dependency's latest moved. Unchanged
+    # verdicts stay put — no blanket re-canary.
     clear_stale_holds(holds, latest_by_package)
-    # Monthly model: re-verify every major still behind (Ready and Blocked).
-    reopen_for_recheck(holds, major_packages)
 
     for scan in scans:
         for row in scan.outdated:

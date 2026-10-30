@@ -3,12 +3,12 @@ from pathlib import Path
 
 from vigil.holds import (
     clear_stale_holds,
+    extract_blocked_by,
     is_held,
     is_ready,
     load_holds,
     make_hold,
     make_ready,
-    reopen_for_recheck,
     save_holds,
     suppresses,
     upsert_hold,
@@ -73,7 +73,7 @@ def test_repo_hold_only_matches_that_app():
     )
 
 
-def test_stale_and_recheck(tmp_path: Path):
+def test_stale_clears_when_own_latest_moves(tmp_path: Path):
     hold = make_hold(
         package="file_picker",
         latest="13.3.0",
@@ -86,15 +86,77 @@ def test_stale_and_recheck(tmp_path: Path):
     holds = [hold]
     clear_stale_holds(holds, {"file_picker": "13.4.0"})
     assert holds[0].status == "cleared"
+    path = tmp_path / "holds.yaml"
+    save_holds(path, holds)
+    assert load_holds(path)[0].status == "cleared"
+
+
+def test_unchanged_blocked_stays_put():
+    hold = make_hold(
+        package="file_picker",
+        latest="13.3.0",
+        reason=(
+            "Because PeekPersonalFinance depends on both file_picker ^13.3.0 "
+            "and package_info_plus ^9.0.0, version solving failed."
+        ),
+        source="solver",
+        scope="repo",
+        discovered_in="Peek",
+        today=date(2026, 10, 29),
+        repo="Peek",
+    )
+    assert hold.blocked_by_package == "package_info_plus"
+    assert hold.blocked_by_version == "9.0.0"
+    holds = [hold]
+    clear_stale_holds(
+        holds,
+        {"file_picker": "13.3.0", "package_info_plus": "9.0.0"},
+    )
+    assert holds[0].is_blocked
+
+
+def test_blocked_wakes_when_blocker_latest_moves():
+    hold = make_hold(
+        package="file_picker",
+        latest="13.3.0",
+        reason=(
+            "Because PeekPersonalFinance depends on both file_picker ^13.3.0 "
+            "and package_info_plus ^9.0.0, version solving failed."
+        ),
+        source="solver",
+        scope="repo",
+        discovered_in="Peek",
+        today=date(2026, 10, 29),
+        repo="Peek",
+    )
+    holds = [hold]
+    clear_stale_holds(
+        holds,
+        {"file_picker": "13.3.0", "package_info_plus": "10.2.2"},
+    )
+    assert holds[0].status == "cleared"
+
+
+def test_ready_unchanged_stays_put():
     ready = make_ready(
         package="csv", latest="8.0.0", discovered_in="app", today=date(2026, 10, 29)
     )
     holds = [ready]
-    reopen_for_recheck(holds, {"csv"})
-    assert holds[0].status == "cleared"
-    path = tmp_path / "holds.yaml"
-    save_holds(path, holds)
-    assert load_holds(path)[0].status == "cleared"
+    clear_stale_holds(holds, {"csv": "8.0.0"})
+    assert holds[0].is_ready
+
+
+def test_extract_blocked_by_either_order():
+    left = extract_blocked_by(
+        "depends on both file_picker ^13.3.0 and package_info_plus ^9.0.0",
+        "file_picker",
+    )
+    assert left == ("package_info_plus", "9.0.0")
+    right = extract_blocked_by(
+        "depends on both package_info_plus ^9.0.0 and file_picker ^13.3.0",
+        "file_picker",
+    )
+    assert right == ("package_info_plus", "9.0.0")
 
 
 def test_upsert_replaces_blocked_with_ready():
@@ -136,3 +198,24 @@ def test_legacy_active_status_loads_as_blocked():
         }
     )
     assert legacy.is_blocked
+
+
+def test_blocked_by_roundtrips_yaml(tmp_path: Path):
+    hold = make_hold(
+        package="file_picker",
+        latest="13.3.0",
+        reason=(
+            "Because Peek depends on both file_picker ^13.3.0 "
+            "and package_info_plus ^9.0.0, version solving failed."
+        ),
+        source="solver",
+        scope="repo",
+        discovered_in="Peek",
+        today=date(2026, 10, 29),
+        repo="Peek",
+    )
+    path = tmp_path / "holds.yaml"
+    save_holds(path, [hold])
+    loaded = load_holds(path)[0]
+    assert loaded.blocked_by_package == "package_info_plus"
+    assert loaded.blocked_by_version == "9.0.0"

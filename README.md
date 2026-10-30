@@ -83,11 +83,11 @@ Or just `vigil` when nothing is configured yet. That will:
 3. Let you pick the folder that holds your Flutter apps, then check which ones to monitor  
 4. Offer to run the first scan and open the report  
 
-**Scans are slow on purpose.** Vigil canaries each resolvable major dependency bump (debug APK, pubspec restored afterward) so the report lists **verified bumps** and **blocked upgrades**, not raw “major behind” noise. A canary failure on one app (for example `file_picker` major 13) is stored as a **global** block so that major is hidden across your other apps until a later scan rechecks it. Solver conflicts can be per-app. A busy store/SDK proposal list or a `degraded` banner is still normal on day one — use `vigil review` for those.
+**Scans canary majors on purpose.** Vigil tries each *new* resolvable major (debug APK, pubspec restored afterward) so the report lists **verified bumps** and **blocked upgrades**, not raw “major behind” noise. A canary failure on one app (for example `file_picker` major 13) is stored as a **global** block so that major is hidden across your other apps. Solver conflicts can be per-app. **Smart recheck:** Ready/Blocked stay put while that package’s pub latest is unchanged; Vigil re-canaries only when that latest moves, or when a recorded conflicting dependency (`blocked_by`) moves. A busy store/SDK proposal list or a `degraded` banner is still normal on day one — use `vigil review` for those.
 
 ### 3. Day to day
 
-Typical monthly loop: run `vigil scan` → act on **Ready** dependency bumps and floor findings (Flutter pin, target API, iOS) → bump versions → commit → CI/store. Next cycle, Vigil rechecks previous blocks and new majors.
+Typical monthly loop: run `vigil scan` → act on **Ready** dependency bumps and floor findings (Flutter pin, target API, iOS) → bump versions → commit → CI/store. Later scans skip unchanged verdicts and only retest when something relevant moved.
 
 | Goal | Command |
 | --- | --- |
@@ -131,10 +131,18 @@ Flutter / Dart pins and constraints (actionable “set FVM or pubspec to X” wh
 Apple Developer News and upcoming requirements, Android Developers Blog, **Google Play Policy Deadlines** (stable table Google updates in place), Play target API pages, Flutter/Dart release feeds. Fetches never write `requirements.yaml`. Policy table rows keep deadlines with the text; review can prefill suggested deadlines.
 
 **Packages**  
-`flutter pub outdated` and pub.dev (discontinued / replaced / advisories). Resolvable majors are canaried to **Ready** or **Blocked**. Only Ready majors appear as bump recommendations; Blocked stays in the report’s blocked section. Signing/setup canary failures are treated as inconclusive, not global blocks.
+`flutter pub outdated` and pub.dev (discontinued / replaced / advisories). Resolvable majors are canaried to **Ready** or **Blocked**. Only Ready majors appear as bump recommendations; Blocked stays in the report’s blocked section. Unchanged Ready/Blocked majors are not re-canaried until that package’s latest (or a recorded `blocked_by` companion) moves. Signing/setup canary failures are treated as inconclusive, not global blocks.
 
 **Schedule**  
-Default monthly timer via `vigil desktop` / installers. Change with `vigil schedule` or `settings.yaml` (`weekly`, `biweekly`, `monthly`, `off`, or `days` + `every_days`).
+Default monthly timer via `vigil desktop` / installers. Change with `vigil schedule` or `settings.yaml` (`weekly`, `biweekly`, `monthly`, `off`, or `days` + `every_days`). Timers use local time; if the machine was asleep/off, Linux `Persistent=true` (and the host equivalents) catch up when they can.
+
+| Setting | When it runs |
+| --- | --- |
+| `monthly` (default) | **1st of each month** — Linux 00:00; macOS / Windows 09:00 |
+| `weekly` | **Mondays** — Linux 00:00; macOS / Windows 09:00 |
+| `biweekly` | Every **14 days** after the timer last fired (also ~15 minutes after boot on Linux the first time) |
+| `days` + `every_days: N` | Every **N days** on the same interval pattern as biweekly |
+| `off` | No automatic scan — run `vigil scan` yourself |
 
 **Other**  
 Expiry dates you list in `expiries.yaml`. Desktop notify after a non-ok scan when enabled.

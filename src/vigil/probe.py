@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from vigil.holds import PackageHold, make_hold, make_ready
+from vigil.holds import PackageHold, extract_blocked_by, make_hold, make_ready
 from vigil.scanners.packages import OutdatedPackage
 
 logger = logging.getLogger("vigil.probe")
@@ -151,6 +151,7 @@ def _probe_one(candidate: ProbeCandidate, *, today: date, build_runner) -> Probe
                 pubspec.write_text(companion_text, encoding="utf-8")
                 pub_ok, pub_detail = _pub_get(candidate.repo_path)
         if not pub_ok:
+            by_pkg, by_ver = extract_blocked_by(pub_detail, candidate.package)
             hold = make_hold(
                 package=candidate.package,
                 latest=candidate.latest,
@@ -161,6 +162,8 @@ def _probe_one(candidate: ProbeCandidate, *, today: date, build_runner) -> Probe
                 today=today,
                 repo=candidate.repo_name,
                 status="blocked",
+                blocked_by_package=by_pkg,
+                blocked_by_version=by_ver,
             )
             return ProbeResult(hold, f"{candidate.package}: pub get failed on {candidate.repo_name}")
         build_ok, build_detail = build_runner(candidate.repo_path)

@@ -1,8 +1,8 @@
 """Package upgrade verdicts. Vigil writes Ready or Blocked after each probe.
 
-Blocked (``status: blocked``, legacy ``active``) hides a major everywhere it
-applies. Ready means the canary build succeeded — only Ready majors appear as
-bump recommendations. Each scan rechecks majors that are still behind.
+Blocked hides a major everywhere it applies. Ready means the canary succeeded.
+Recheck is cheap: re-canary only when this package's latest moves, or when a
+recorded ``blocked_by`` dependency's latest moves.
 """
 
 from __future__ import annotations
@@ -15,15 +15,20 @@ from pathlib import Path
 
 import yaml
 
-from vigil.versions import major, version_lt
+from vigil.versions import major, version_eq, version_lt
 
 _DATE_TEXT = re.compile(r"\d{4}-\d{2}-\d{2}")
 _HEADER = (
     "# Package upgrade verdicts. Vigil writes Ready/Blocked after solver or canary probes.\n"
     "# Only Ready majors appear as bump recommendations. Blocked stays out of the todo list.\n"
+    "# Recheck when this package's latest moves, or blocked_by's latest moves.\n"
 )
-
-_BLOCKED = frozenset({"blocked", "active"})  # active = legacy name
+_BOTH_DEPS = re.compile(
+    r"depends on both\s+([A-Za-z0-9_]+)\s+\^?([0-9][\w.+-]*)\s+and\s+"
+    r"([A-Za-z0-9_]+)\s+\^?([0-9][\w.+-]*)",
+    re.IGNORECASE,
+)
+_BLOCKED = frozenset({"blocked", "active"})
 _READY = frozenset({"ready"})
 
 
@@ -51,8 +56,10 @@ class PackageHold:
     scope: str  # global | repo
     discovered_in: str
     found_at: str
-    status: str = "blocked"  # ready | blocked | cleared (active → blocked)
+    status: str = "blocked"  # ready | blocked | cleared
     repo: str | None = None
+    blocked_by_package: str | None = None
+    blocked_by_version: str | None = None
 
     @property
     def is_blocked(self) -> bool:
@@ -78,6 +85,10 @@ class PackageHold:
         }
         if self.repo:
             payload["repo"] = self.repo
+        if self.blocked_by_package:
+            payload["blocked_by_package"] = self.blocked_by_package
+        if self.blocked_by_version:
+            payload["blocked_by_version"] = self.blocked_by_version
         return payload
 
     @classmethod
@@ -98,6 +109,16 @@ class PackageHold:
             found_at=str(raw.get("found_at") or ""),
             status=status,
             repo=(None if raw.get("repo") in (None, "") else str(raw.get("repo"))),
+            blocked_by_package=(
+                None
+                if raw.get("blocked_by_package") in (None, "")
+                else str(raw.get("blocked_by_package"))
+            ),
+            blocked_by_version=(
+                None
+                if raw.get("blocked_by_version") in (None, "")
+                else str(raw.get("blocked_by_version"))
+            ),
         )
 
 
@@ -110,6 +131,21 @@ def hold_id(
 ) -> str:
     key = f"{package}\n{blocked_major}\n{scope}\n{repo or ''}\n{latest}"
     return hashlib.sha256(key.encode()).hexdigest()[:16]
+
+
+def extract_blocked_by(reason: str, package: str) -> tuple[str | None, str | None]:
+    """Best-effort conflicting package + version from pub solver text."""
+    match = _BOTH_DEPS.search(reason or "")
+    if not match:
+        return None, None
+    left, left_ver, right, right_ver = match.groups()
+    left_ver = left_ver.rstrip(".,;")
+    right_ver = right_ver.rstrip(".,;")
+    if left == package:
+        return right, right_ver
+    if right == package:
+        return left, left_ver
+    return None, None
 
 
 def load_holds(path: Path) -> list[PackageHold]:
@@ -138,7 +174,6 @@ def save_holds(path: Path, holds: list[PackageHold]) -> None:
 
 
 def active_holds(holds: list[PackageHold]) -> list[PackageHold]:
-    """Blocked verdicts (legacy name kept for callers)."""
     return [item for item in holds if item.is_blocked]
 
 
@@ -173,7 +208,6 @@ def suppresses(
     latest: str | None,
     repo: str | None,
 ) -> bool:
-    """True when this blocked verdict should hide a major-behind finding."""
     if not hold.is_blocked:
         return False
     return _matches_major(hold, package=package, latest=latest, repo=repo)
@@ -209,36 +243,29 @@ def clear_stale_holds(
     holds: list[PackageHold],
     latest_by_package: dict[str, str],
 ) -> list[PackageHold]:
-    """Clear ready/blocked when pub latest moved past what was verified."""
+    """Clear Ready/Blocked when this package's latest moved, or blocked_by moved."""
     for hold in holds:
         if hold.status == "cleared":
             continue
         latest = latest_by_package.get(hold.package)
-        if not latest:
-            continue
-        latest_major = major(latest)
-        if (
-            hold.blocked_major is not None
-            and latest_major is not None
-            and latest_major > hold.blocked_major
-        ):
-            hold.status = "cleared"
-            continue
-        if hold.latest_when_held and version_lt(hold.latest_when_held, latest):
-            hold.status = "cleared"
+        if latest:
+            latest_major = major(latest)
+            if (
+                hold.blocked_major is not None
+                and latest_major is not None
+                and latest_major > hold.blocked_major
+            ):
+                hold.status = "cleared"
+                continue
+            if hold.latest_when_held and version_lt(hold.latest_when_held, latest):
+                hold.status = "cleared"
+                continue
+        if hold.is_blocked and hold.blocked_by_package and hold.blocked_by_version:
+            blocker_latest = latest_by_package.get(hold.blocked_by_package)
+            # Any move of the conflicting package (usually an upgrade) wakes abc.
+            if blocker_latest and not version_eq(hold.blocked_by_version, blocker_latest):
+                hold.status = "cleared"
     return holds
-
-
-def reopen_for_recheck(
-    holds: list[PackageHold],
-    packages: set[str],
-) -> None:
-    """Clear ready/blocked for packages still major-behind so this scan re-probes them."""
-    for hold in holds:
-        if hold.package not in packages:
-            continue
-        if hold.is_blocked or hold.is_ready:
-            hold.status = "cleared"
 
 
 def upsert_hold(holds: list[PackageHold], fresh: PackageHold) -> list[PackageHold]:
@@ -276,8 +303,13 @@ def make_hold(
     today: date,
     repo: str | None = None,
     status: str = "blocked",
+    blocked_by_package: str | None = None,
+    blocked_by_version: str | None = None,
 ) -> PackageHold:
     blocked = major(latest)
+    by_pkg, by_ver = blocked_by_package, blocked_by_version
+    if status == "blocked" and not by_pkg:
+        by_pkg, by_ver = extract_blocked_by(reason, package)
     return PackageHold(
         id=hold_id(package, blocked, scope, repo, latest),
         package=package,
@@ -290,6 +322,8 @@ def make_hold(
         found_at=today.isoformat(),
         status=status,
         repo=repo if scope == "repo" else None,
+        blocked_by_package=by_pkg,
+        blocked_by_version=by_ver,
     )
 
 
