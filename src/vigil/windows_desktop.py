@@ -13,6 +13,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+from vigil.config import Paths, load_settings
+from vigil.schedule import ScanSchedule, windows_task_names
+
 logger = logging.getLogger("vigil.windows")
 
 
@@ -139,33 +142,49 @@ def install_start_menu_shortcuts(exe: Path) -> list[Path]:
     return written
 
 
-def install_monthly_task(exe: Path) -> bool:
-    """Register a monthly user scheduled task that runs ``vigil scan``."""
-    # /ST is required by some Windows builds; 09:00 local on day 1.
-    command = [
-        "schtasks",
-        "/Create",
-        "/TN",
-        "VigilMonthlyScan",
-        "/TR",
-        f'"{exe}" scan',
-        "/SC",
-        "MONTHLY",
-        "/D",
-        "1",
-        "/ST",
-        "09:00",
-        "/F",
-    ]
+def _load_schedule() -> ScanSchedule:
+    try:
+        return load_settings(Paths.from_env().config_dir / "settings.yaml").schedule
+    except Exception:  # noqa: BLE001
+        return ScanSchedule()
+
+
+def _delete_task(name: str) -> None:
+    subprocess.run(
+        ["schtasks", "/Delete", "/TN", name, "/F"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def install_scan_task(exe: Path, schedule: ScanSchedule | None = None) -> bool:
+    """Register or remove the user scheduled task from the scan schedule."""
+    schedule = schedule or ScanSchedule()
+    task_name, legacy = windows_task_names()
+    _delete_task(legacy)
+    args = schedule.windows_schtasks(str(exe))
+    if args is None:
+        _delete_task(task_name)
+        return True
+    command = ["schtasks", *args]
     completed = subprocess.run(command, check=False, capture_output=True, text=True)
     if completed.returncode != 0:
-        logger.warning("Could not create monthly task: %s", (completed.stderr or completed.stdout)[:300])
+        logger.warning(
+            "Could not create scan task: %s",
+            (completed.stderr or completed.stdout)[:300],
+        )
         return False
     return True
 
 
+def install_monthly_task(exe: Path) -> bool:
+    """Backward-compatible alias for :func:`install_scan_task`."""
+    return install_scan_task(exe)
+
+
 def install_windows_integration(*, quiet: bool = False) -> int:
-    """PATH + Start Menu shortcuts + monthly task for the current user."""
+    """PATH + Start Menu shortcuts + scheduled scan task for the current user."""
     exe = vigil_exe()
     scripts = vigil_scripts_dir()
     if exe is None or scripts is None:
@@ -174,7 +193,8 @@ def install_windows_integration(*, quiet: bool = False) -> int:
         return 1
     changed = add_to_user_path(scripts)
     shortcuts = install_start_menu_shortcuts(exe)
-    task = install_monthly_task(exe)
+    schedule = _load_schedule()
+    task = install_scan_task(exe, schedule)
     if quiet:
         return 0
     if changed:
@@ -184,9 +204,14 @@ def install_windows_integration(*, quiet: bool = False) -> int:
         print(f"User PATH already includes: {scripts}")
     for path in shortcuts:
         print(f"Start Menu: {path}")
-    if task:
-        print("Scheduled task: VigilMonthlyScan (monthly)")
+    print(f"scan schedule: {schedule.describe()}")
+    task_name, _legacy = windows_task_names()
+    if schedule.kind == "off":
+        print(f"Scheduled task: {task_name} removed (off)")
+    elif task:
+        print(f"Scheduled task: {task_name}")
     else:
         print("Scheduled task was not created; run scans with: vigil scan")
     print("Start Menu → Vigil opens the latest report. Vigil Setup runs the wizard.")
+    print("Change the timer with: vigil schedule weekly|biweekly|monthly|off|days <N>")
     return 0

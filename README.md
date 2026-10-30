@@ -1,12 +1,12 @@
 # Vigil
 
-Vigil is a monthly maintenance check for Flutter apps you have already shipped. It compares each repo with store and SDK requirements you have approved, and it files news snippets for you to accept or dismiss. It does not open pull requests and it does not replace Dependabot or Sentry.
+Vigil is a scheduled maintenance check for Flutter apps you have already shipped. It compares each repo with store and SDK floors you have approved, watches policy sources (Apple news, Play Policy Deadlines, Flutter releases, and more), and verifies major dependency bumps with canary builds so your todo list is **Ready** (safe to bump) or **Blocked** (skip) — not untested noise.
 
-Your monitored projects, snapshots, and reports live on **your machine** (not in this git repo). Flutter is the supported stack. Linux, macOS, and Windows are supported for paths, tray, and notifications. Licensed under the [MIT License](LICENSE). See [CONTRIBUTING.md](CONTRIBUTING.md) for scope.
+It does not open pull requests and it does not replace Dependabot or Sentry. Your monitored projects, snapshots, holds, and reports live on **your machine** (not in this git repo). Flutter is the supported stack. Linux, macOS, and Windows are supported for paths, tray, notifications, and scan timers. Licensed under the [MIT License](LICENSE). See [CONTRIBUTING.md](CONTRIBUTING.md) for scope.
 
 ## Quick start
 
-Needs **Python 3.11+**. For package checks, have `flutter` on your `PATH`.
+Needs **Python 3.11+**. For package checks and canaries, have `flutter` on your `PATH`.
 
 If `vigil` is not on your PATH yet, `python -m vigil …` (or `py -3 -m vigil …` on Windows) works the same.
 
@@ -41,7 +41,7 @@ If `vigil` is missing after install, add `~/.local/bin` to your `PATH` and open 
 powershell -ExecutionPolicy Bypass -File .\packaging\install.ps1
 ```
 
-That creates a venv under `%LOCALAPPDATA%\vigil\venv`, puts `vigil` on your **user PATH**, adds Start Menu entries, and registers a monthly scan task. Open a **new** terminal afterward so PATH updates.
+That creates a venv under `%LOCALAPPDATA%\vigil\venv`, puts `vigil` on your **user PATH**, adds Start Menu entries, and registers a scheduled scan task (default monthly). Open a **new** terminal afterward so PATH updates.
 
 To install and jump straight into the wizard:
 
@@ -66,7 +66,7 @@ chmod +x packaging/install.command packaging/install-macos.sh
 ./packaging/install-macos.sh --setup
 ```
 
-That creates a venv under `~/Library/Application Support/vigil/venv`, adds `vigil` to your shell PATH (`~/.zprofile` / `~/.bash_profile`), installs **Vigil** / **Vigil Setup** / **Vigil Tray** under `~/Applications`, and registers LaunchAgents for a monthly scan and tray at login.
+That creates a venv under `~/Library/Application Support/vigil/venv`, adds `vigil` to your shell PATH (`~/.zprofile` / `~/.bash_profile`), installs **Vigil** / **Vigil Setup** / **Vigil Tray** under `~/Applications`, and registers LaunchAgents for a scheduled scan and tray at login.
 
 The first time macOS may block an unsigned app: **right-click → Open**, or System Settings → Privacy & Security → **Open Anyway**. That is expected without App Store / notarization.
 
@@ -83,17 +83,21 @@ Or just `vigil` when nothing is configured yet. That will:
 3. Let you pick the folder that holds your Flutter apps, then check which ones to monitor  
 4. Offer to run the first scan and open the report  
 
-The first scan can take several minutes. A busy proposal list or a `degraded` banner is normal on day one — use `vigil review` later for proposals that affect your apps.
+**Scans are slow on purpose.** Vigil canaries each resolvable major dependency bump (debug APK, pubspec restored afterward) so the report lists **verified bumps** and **blocked upgrades**, not raw “major behind” noise. A canary failure on one app (for example `file_picker` major 13) is stored as a **global** block so that major is hidden across your other apps until a later scan rechecks it. Solver conflicts can be per-app. A busy store/SDK proposal list or a `degraded` banner is still normal on day one — use `vigil review` for those.
 
 ### 3. Day to day
+
+Typical monthly loop: run `vigil scan` → act on **Ready** dependency bumps and floor findings (Flutter pin, target API, iOS) → bump versions → commit → CI/store. Next cycle, Vigil rechecks previous blocks and new majors.
 
 | Goal | Command |
 | --- | --- |
 | See last result | `vigil` or `vigil status` |
 | Open the report | `vigil open` (also Start Menu → **Vigil** on Windows) |
-| Scan again | `vigil scan` |
-| Accept / dismiss proposals | `vigil review` |
+| Scan again | `vigil scan` (slow; verifies majors fleet-wide) |
+| Accept / dismiss store & SDK proposals | `vigil review` |
 | Change which apps are monitored | `vigil projects` |
+| Automatic scan schedule | `vigil schedule` (`weekly` / `biweekly` / `monthly` / `off` / `days 45`) |
+| Reinstall desktop hooks + timer | `vigil desktop` |
 | Status icon | `vigil tray` |
 
 On Linux search the apps grid for **Vigil**. On Windows use Start Menu → **Vigil**. On macOS open **Vigil** from `~/Applications`.
@@ -106,14 +110,34 @@ On Linux search the apps grid for **Vigil**. On Windows use Start Menu → **Vig
 | State | `~/.local/state/vigil/` | `~/Library/Caches/vigil/` | `%LOCALAPPDATA%\vigil\` |
 | Reports | `~/.local/share/vigil/reports/` | `~/Library/Application Support/vigil/reports/` | `%LOCALAPPDATA%\vigil\reports\` |
 
+Useful config files (examples ship under `src/vigil/examples/`):
+
+| File | Role |
+| --- | --- |
+| `repos.yaml` | Monitored apps |
+| `requirements.yaml` | Hand-approved floors (only `vigil review` edits) |
+| `requirements.pending.yaml` | Proposals from sources |
+| `sources.yaml` | Policy/news feeds (includes Play Policy Deadlines) |
+| `holds.yaml` | Ready / Blocked package verdicts (Vigil writes these) |
+| `settings.yaml` | Notify, schedule, `probe_builds` / `probe_budget` |
+| `expiries.yaml` | Certs / accounts you track by hand |
+
 ## What Vigil checks
 
-- Flutter / Dart pins and constraints, Android `targetSdk` / `compileSdk`, iOS deployment target  
-- `flutter pub outdated` and pub.dev (discontinued / replaced packages)  
-- Requirement pages you configure; proposals never edit `requirements.yaml` until `vigil review`  
-- Expiry dates you list in `expiries.yaml`  
+**Floors (per app)**  
+Flutter / Dart pins and constraints (actionable “set FVM or pubspec to X” when unpinned), Android `targetSdk` / `compileSdk`, iOS deployment target, and hand-approved Xcode / Play API requirements.
 
-Examples live under `src/vigil/examples/`. Contribution notes: [CONTRIBUTING.md](CONTRIBUTING.md).
+**Sources (proposals only until review)**  
+Apple Developer News and upcoming requirements, Android Developers Blog, **Google Play Policy Deadlines** (stable table Google updates in place), Play target API pages, Flutter/Dart release feeds. Fetches never write `requirements.yaml`. Policy table rows keep deadlines with the text; review can prefill suggested deadlines.
+
+**Packages**  
+`flutter pub outdated` and pub.dev (discontinued / replaced / advisories). Resolvable majors are canaried to **Ready** or **Blocked**. Only Ready majors appear as bump recommendations; Blocked stays in the report’s blocked section. Signing/setup canary failures are treated as inconclusive, not global blocks.
+
+**Schedule**  
+Default monthly timer via `vigil desktop` / installers. Change with `vigil schedule` or `settings.yaml` (`weekly`, `biweekly`, `monthly`, `off`, or `days` + `every_days`).
+
+**Other**  
+Expiry dates you list in `expiries.yaml`. Desktop notify after a non-ok scan when enabled.
 
 ## Tests
 

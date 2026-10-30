@@ -14,6 +14,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+from vigil.config import Paths, load_settings
+from vigil.schedule import ScanSchedule
+
 logger = logging.getLogger("vigil.macos")
 
 _PATH_MARKER = "# Vigil PATH (managed by vigil desktop)"
@@ -156,14 +159,38 @@ def install_app_bundles(vigil: Path, home: Path | None = None) -> list[Path]:
     return written
 
 
-def scan_launch_agent_plist(vigil: Path) -> dict:
-    return {
+def scan_launch_agent_plist(vigil: Path, schedule: ScanSchedule | None = None) -> dict | None:
+    """LaunchAgent payload for the scan schedule, or None when schedule is off."""
+    schedule = schedule or ScanSchedule()
+    interval = schedule.launchd_interval()
+    if interval is None:
+        return None
+    payload = {
         "Label": _LAUNCH_SCAN,
         "ProgramArguments": [str(vigil), "scan"],
-        "StartCalendarInterval": {"Day": 1, "Hour": 9, "Minute": 0},
         "StandardOutPath": str(Path.home() / "Library" / "Logs" / "vigil-scan.log"),
         "StandardErrorPath": str(Path.home() / "Library" / "Logs" / "vigil-scan.err"),
     }
+    payload.update(interval)
+    return payload
+
+
+def _load_schedule() -> ScanSchedule:
+    try:
+        return load_settings(Paths.from_env().config_dir / "settings.yaml").schedule
+    except Exception:  # noqa: BLE001
+        return ScanSchedule()
+
+
+def uninstall_launch_agent(label: str, home: Path | None = None) -> Path | None:
+    directory = launch_agents_dir(home)
+    path = directory / f"{label}.plist"
+    uid = os.getuid()
+    subprocess.run(["launchctl", "bootout", f"gui/{uid}", str(path)], check=False, capture_output=True)
+    if path.is_file():
+        path.unlink()
+        return path
+    return None
 
 
 def tray_launch_agent_plist(vigil: Path) -> dict:
@@ -201,7 +228,13 @@ def install_macos_integration(*, quiet: bool = False) -> int:
         return 1
     profiles = add_to_shell_path(bin_dir)
     apps = install_app_bundles(vigil)
-    scan_plist = install_launch_agent(_LAUNCH_SCAN, scan_launch_agent_plist(vigil))
+    schedule = _load_schedule()
+    scan_payload = scan_launch_agent_plist(vigil, schedule)
+    if scan_payload is None:
+        removed = uninstall_launch_agent(_LAUNCH_SCAN)
+        scan_plist = removed
+    else:
+        scan_plist = install_launch_agent(_LAUNCH_SCAN, scan_payload)
     tray_plist = install_launch_agent(_LAUNCH_TRAY, tray_launch_agent_plist(vigil))
     if quiet:
         return 0
@@ -213,7 +246,12 @@ def install_macos_integration(*, quiet: bool = False) -> int:
         print(f"Shell PATH already includes: {bin_dir}")
     for app in apps:
         print(f"Applications: {app}")
-    print(f"LaunchAgent: {scan_plist} (monthly scan)")
+    print(f"scan schedule: {schedule.describe()}")
+    if scan_plist is not None:
+        print(f"LaunchAgent: {scan_plist}")
+    else:
+        print("LaunchAgent: scan timer off")
     print(f"LaunchAgent: {tray_plist} (tray at login)")
     print("Open ~/Applications/Vigil.app for the latest report (first time: right-click → Open).")
+    print("Change the timer with: vigil schedule weekly|biweekly|monthly|off|days <N>")
     return 0

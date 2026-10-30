@@ -299,6 +299,25 @@ details.proposals .panel-body { margin-top: 12px; }
   <p class="empty">No repos scanned.</p>
   {% endif %}
 
+  <h2>Verified bumps</h2>
+  <p class="section-note">Majors Vigil canaried successfully. These are the safe dependency bumps for this cycle.</p>
+  <div class="panel">
+    {% if ready %}
+    <ul class="todo-list">
+      {% for hold in ready %}
+      <li class="sev-watch">
+        <code>{{ hold.package }}</code>
+        {% if hold.blocked_major %} → major {{ hold.blocked_major }}{% endif %}
+        ({{ hold.latest_when_held }}, verified on {{ hold.discovered_in }})
+        <br><span class="muted">{{ hold.reason }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty">No verified major bumps this cycle.</p>
+    {% endif %}
+  </div>
+
   <h2>Package health</h2>
   <div class="panel">
     {% if packages %}
@@ -308,7 +327,27 @@ details.proposals .panel-body { margin-top: 12px; }
       {% endfor %}
     </ul>
     {% else %}
-    <p class="empty">No discontinued, retracted, or outdated direct packages recorded.</p>
+    <p class="empty">No discontinued, retracted, verified bumps, or other package notes.</p>
+    {% endif %}
+  </div>
+
+  <h2>Blocked upgrades</h2>
+  <p class="section-note">Solver or canary failures. Not on the bump list until a later scan rechecks and they pass.</p>
+  <div class="panel">
+    {% if holds %}
+    <ul class="todo-list">
+      {% for hold in holds %}
+      <li class="sev-watch">
+        <code>{{ hold.package }}</code>
+        {% if hold.blocked_major %} major {{ hold.blocked_major }}{% endif %}
+        ({{ hold.scope }} / {{ hold.source }}, from {{ hold.discovered_in }})
+        — held at {{ hold.latest_when_held }}
+        <br><span class="muted">{{ hold.reason }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty">No blocked package upgrades.</p>
     {% endif %}
   </div>
 

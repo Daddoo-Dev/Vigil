@@ -15,8 +15,9 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from vigil.config import Paths
+from vigil.config import Paths, load_settings
 from vigil.host import default_path_roots, open_path, supports_linux_desktop_files
+from vigil.schedule import ScanSchedule
 
 logger = logging.getLogger("vigil.desktop")
 
@@ -183,15 +184,18 @@ def install_desktop_integration(*, quiet: bool = False) -> int:
             print("Fallback if `vigil` is not on PATH: python -m vigil setup")
         return 0
     installed = install_desktop_files()
-    units = install_user_units()
+    schedule = _load_schedule()
+    units = install_user_units(schedule)
     if quiet:
         return 0
     print(f"apps launcher: {installed['app']}")
     print(f"tray autostart: {installed['tray']}")
+    print(f"scan schedule: {schedule.describe()}")
     for unit in units:
         print(f"systemd: {unit}")
     print("Search for Vigil in the apps grid to open the latest report.")
     print("Log out and back in once so the tray starts, or run: vigil tray")
+    print("Change the timer with: vigil schedule weekly|biweekly|monthly|off|days <N>")
     return 0
 
 
@@ -234,29 +238,39 @@ def scan_service_text(binary: str) -> str:
     )
 
 
-def scan_timer_text() -> str:
-    return (
-        "[Unit]\n"
-        "Description=Run the Vigil maintenance scan every month\n"
-        "\n"
-        "[Timer]\n"
-        "OnCalendar=monthly\n"
-        "Persistent=true\n"
-        "\n"
-        "[Install]\n"
-        "WantedBy=timers.target\n"
-    )
+def scan_timer_text(schedule: ScanSchedule | None = None) -> str | None:
+    """Timer unit body for ``schedule``, or None when scanning is off."""
+    return (schedule or ScanSchedule()).systemd_timer()
 
 
-def install_user_units() -> list[Path]:
-    """Install and enable the monthly scan timer for the current user."""
+def _load_schedule() -> ScanSchedule:
+    try:
+        return load_settings(Paths.from_env().config_dir / "settings.yaml").schedule
+    except Exception:  # noqa: BLE001 - desktop install should not abort on settings issues
+        return ScanSchedule()
+
+
+def install_user_units(schedule: ScanSchedule | None = None) -> list[Path]:
+    """Install or disable the user scan timer from ``settings.yaml`` schedule."""
+    schedule = schedule or _load_schedule()
     unit_dir = config_home() / "systemd" / "user"
     unit_dir.mkdir(parents=True, exist_ok=True)
     binary = vigil_binary()
     service = unit_dir / "vigil-scan.service"
     timer = unit_dir / "vigil-scan.timer"
     service.write_text(scan_service_text(binary), encoding="utf-8")
-    timer.write_text(scan_timer_text(), encoding="utf-8")
+    body = schedule.systemd_timer()
+    subprocess.run(["systemctl", "--user", "daemon-reload"], check=False, capture_output=True)
+    if body is None:
+        subprocess.run(
+            ["systemctl", "--user", "disable", "--now", "vigil-scan.timer"],
+            check=False,
+            capture_output=True,
+        )
+        if timer.is_file():
+            timer.unlink()
+        return [service]
+    timer.write_text(body, encoding="utf-8")
     subprocess.run(["systemctl", "--user", "daemon-reload"], check=False, capture_output=True)
     subprocess.run(
         ["systemctl", "--user", "enable", "--now", "vigil-scan.timer"],

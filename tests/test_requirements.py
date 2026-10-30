@@ -79,6 +79,28 @@ def test_older_flutter_pin_is_action():
     assert "3.24.0 is below recommended stable 3.47.7" in findings[0].message
 
 
+def test_missing_flutter_pin_names_the_recommended_target():
+    requirements = {"flutter": {"recommended_stable": {"value": "3.47.7"}}}
+    findings = compare_repo(
+        _facts(flutter_pin=None, flutter_constraint=None),
+        requirements,
+        TODAY,
+    )
+    assert findings[0].severity == "watch"
+    assert "no Flutter pin — set FVM or pubspec to 3.47.7" in findings[0].message
+
+
+def test_loose_flutter_constraint_names_the_pin_target():
+    requirements = {"flutter": {"recommended_stable": {"value": "3.47.7"}}}
+    findings = compare_repo(
+        _facts(flutter_pin=None, flutter_constraint=">=3.22.1"),
+        requirements,
+        TODAY,
+    )
+    assert findings[0].severity == "watch"
+    assert "pin FVM or pubspec to 3.47.7" in findings[0].message
+
+
 def test_ios_below_minimum_is_action():
     requirements = {"ios": {"min_deployment_target": {"value": "13.0"}}}
     findings = compare_repo(_facts(ios_deployment="12.0"), requirements, TODAY)

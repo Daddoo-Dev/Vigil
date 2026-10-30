@@ -23,6 +23,20 @@ from vigil.config import (
 from vigil.drift import DriftInput, build_drift
 from vigil.extractors import Candidate, get_extractor
 from vigil.fetchers import FetchResult, fetch_source, make_client
+from vigil.holds import (
+    PackageHold,
+    active_holds,
+    clear_stale_holds,
+    is_held,
+    is_ready,
+    load_holds,
+    make_hold,
+    ready_holds,
+    reopen_for_recheck,
+    save_holds,
+    upsert_hold,
+)
+from vigil.probe import collect_probe_candidates, run_canary_probes
 from vigil.report import (
     now_iso,
     overall_state,
@@ -150,10 +164,13 @@ def _run_scan(paths, client, today, outdated_runner, pubdev_client, notify_fn, s
     pub_errors, pub_info = _pubdev(scans, client, pubdev_client, progress)
     errors.extend(pub_errors)
 
+    holds, probe_notes = _holds_phase(paths, scans, settings, today, progress, errors)
+    errors.extend(probe_notes)
+
     findings = list(global_findings(requirements, today))
     for scan in scans:
         findings.extend(compare_repo(_facts(scan), requirements, today))
-        findings.extend(_package_findings(scan, pub_info))
+        findings.extend(_package_findings(scan, pub_info, holds))
     for expiry in expiries:
         if expiry.severity == "info":
             continue
@@ -168,6 +185,8 @@ def _run_scan(paths, client, today, outdated_runner, pubdev_client, notify_fn, s
     affects_apps, worth_knowing = split_proposals(pending_rows)
     state = overall_state(errors, action_count)
     drift = build_drift([_drift_input(scan) for scan in scans])
+    blocked = active_holds(holds)
+    ready = ready_holds(holds)
     context = {
         "state": state,
         "state_label": {"ok": "OK", "action": "Action needed", "degraded": "Degraded"}[state],
@@ -193,6 +212,28 @@ def _run_scan(paths, client, today, outdated_runner, pubdev_client, notify_fn, s
             {"severity": finding.severity, "message": finding.message}
             for finding in findings
             if finding.category == "package"
+        ],
+        "ready": [
+            {
+                "package": hold.package,
+                "blocked_major": hold.blocked_major,
+                "latest_when_held": hold.latest_when_held,
+                "discovered_in": hold.discovered_in,
+                "reason": hold.reason,
+            }
+            for hold in ready
+        ],
+        "holds": [
+            {
+                "package": hold.package,
+                "blocked_major": hold.blocked_major,
+                "latest_when_held": hold.latest_when_held,
+                "scope": hold.scope,
+                "source": hold.source,
+                "discovered_in": hold.discovered_in,
+                "reason": hold.reason,
+            }
+            for hold in blocked
         ],
         "expiries": [
             {"severity": expiry.severity, "message": expiry_message(expiry)} for expiry in expiries
@@ -346,6 +387,7 @@ def _proposals_from(source_id: str, candidates: list[Candidate], today: date) ->
                 suggested_field=candidate.suggested_field,
                 suggested_value=candidate.suggested_value,
                 status="pending",
+                suggested_deadline=candidate.suggested_deadline,
             )
         )
     return proposals
@@ -434,8 +476,121 @@ def _facts(scan: RepoScan) -> RepoFacts:
     )
 
 
-def _package_findings(scan: RepoScan, pub_info: dict[str, PubInfo]) -> list[Finding]:
+def _holds_phase(
+    paths: Paths,
+    scans: list[RepoScan],
+    settings: Settings,
+    today: date,
+    progress,
+    errors: list[str],
+) -> tuple[list[PackageHold], list[str]]:
+    """Verify majors: solver blocks, then canary until Ready or Blocked for each."""
+    notes: list[str] = []
+    path = paths.config_dir / "holds.yaml"
+    try:
+        holds = load_holds(path)
+    except ValueError as exc:
+        errors.append(f"holds.yaml: {exc}")
+        holds = []
+
+    latest_by_package: dict[str, str] = {}
+    major_packages: set[str] = set()
+    for scan in scans:
+        for row in scan.outdated:
+            if row.kind != "direct" or not row.latest:
+                continue
+            previous = latest_by_package.get(row.name)
+            if previous is None or row.latest == previous:
+                latest_by_package[row.name] = row.latest
+            if row.major_behind and row.name in scan.flutter.direct_dependencies:
+                major_packages.add(row.name)
+
+    clear_stale_holds(holds, latest_by_package)
+    # Monthly model: re-verify every major still behind (Ready and Blocked).
+    reopen_for_recheck(holds, major_packages)
+
+    for scan in scans:
+        for row in scan.outdated:
+            if row.kind != "direct" or not row.solver_blocked or not row.latest:
+                continue
+            if row.name not in scan.flutter.direct_dependencies:
+                continue
+            hold = make_hold(
+                package=row.name,
+                latest=row.latest,
+                reason=(
+                    f"pub outdated: resolvable {row.resolvable} cannot reach latest {row.latest}"
+                ),
+                source="solver",
+                scope="repo",
+                discovered_in=scan.repo.name,
+                today=today,
+                repo=scan.repo.name,
+                status="blocked",
+            )
+            upsert_hold(holds, hold)
+
+    if settings.probe_builds:
+        candidates = collect_probe_candidates(scans)
+        judged = {
+            hold.package
+            for hold in holds
+            if (hold.is_blocked or hold.is_ready)
+            and hold.scope == "global"
+        }
+        # Also skip packages already blocked/ready for the canary repo this scan.
+        filtered = []
+        for candidate in candidates:
+            if candidate.package in judged:
+                continue
+            if is_held(
+                holds,
+                package=candidate.package,
+                latest=candidate.latest,
+                repo=candidate.repo_name,
+            ):
+                continue
+            if is_ready(
+                holds,
+                package=candidate.package,
+                latest=candidate.latest,
+                repo=candidate.repo_name,
+            ):
+                continue
+            filtered.append(candidate)
+        if filtered:
+            budget = settings.probe_budget
+            planned = len(filtered) if budget == 0 else min(budget, len(filtered))
+            progress(
+                f"Verifying upgrades ({planned} of {len(filtered)} majors; "
+                "slow on purpose — one failure blocks that major on all apps)"
+            )
+            for result in run_canary_probes(
+                filtered,
+                held_packages=judged,
+                today=today,
+                budget=budget,
+            ):
+                notes.append(f"probe: {result.detail}")
+                if result.hold:
+                    upsert_hold(holds, result.hold)
+                    if result.hold.scope == "global":
+                        judged.add(result.hold.package)
+
+    try:
+        save_holds(path, holds)
+    except OSError as exc:
+        errors.append(f"holds.yaml: could not write: {exc}")
+    return holds, notes
+
+
+def _package_findings(
+    scan: RepoScan,
+    pub_info: dict[str, PubInfo],
+    holds: list[PackageHold] | None = None,
+) -> list[Finding]:
     findings: list[Finding] = []
+    holds = holds or []
     outdated = {item.name: item for item in scan.outdated if item.kind == "direct"}
     names = list(dict.fromkeys([*scan.flutter.direct_dependencies, *outdated]))
     for name in names:
@@ -482,16 +637,24 @@ def _package_findings(scan: RepoScan, pub_info: dict[str, PubInfo]) -> list[Find
                 )
             )
         if row and row.major_behind:
+            # Only Ready majors are bump recommendations. Blocked/unverified stay out.
+            ready = is_ready(
+                holds, package=name, latest=row.latest, repo=scan.repo.name
+            )
+            if not ready:
+                continue
             findings.append(
                 Finding(
                     "watch",
-                    f"{scan.repo.name}: {name} {row.current} is a major behind {row.latest}",
+                    f"{scan.repo.name}: {name} {row.current} → {row.latest} (verified bump)",
                     scan.repo.name,
                     scan.repo.priority,
                     "package",
                 )
             )
         elif row and row.is_outdated:
+            if is_held(holds, package=name, latest=row.latest, repo=scan.repo.name):
+                continue
             findings.append(
                 Finding(
                     "info",

@@ -82,9 +82,10 @@ class Proposal:
     suggested_field: str | None
     suggested_value: str | None
     status: str
+    suggested_deadline: str | None = None
 
     def to_dict(self) -> dict:
-        return {
+        payload = {
             "id": self.id,
             "source_id": self.source_id,
             "found_at": self.found_at,
@@ -94,6 +95,9 @@ class Proposal:
             "suggested_value": self.suggested_value,
             "status": self.status,
         }
+        if self.suggested_deadline:
+            payload["suggested_deadline"] = self.suggested_deadline
+        return payload
 
     @classmethod
     def from_dict(cls, raw: dict) -> Proposal:
@@ -108,6 +112,11 @@ class Proposal:
                 None if raw.get("suggested_value") in (None, "") else str(raw.get("suggested_value"))
             ),
             status=str(raw.get("status") or "pending"),
+            suggested_deadline=(
+                None
+                if raw.get("suggested_deadline") in (None, "")
+                else str(raw.get("suggested_deadline"))
+            ),
         )
 
 
@@ -342,7 +351,7 @@ def _flutter(facts: RepoFacts, requirements: dict, today: date) -> list[Finding]
         return [
             Finding(
                 "watch",
-                f"{facts.name}: FVM pin {facts.fvm_channel!r} is not a version, so it cannot be compared to Flutter {recommended}",
+                f"{facts.name}: FVM pin {facts.fvm_channel!r} is not a version — set FVM or pubspec to {recommended} (recommended stable)",
                 facts.name,
                 facts.priority,
             )
@@ -370,7 +379,7 @@ def _flutter(facts: RepoFacts, requirements: dict, today: date) -> list[Finding]
         return [
             Finding(
                 "watch",
-                f"{facts.name}: Flutter constraint {facts.flutter_constraint} allows versions older than recommended stable {recommended}",
+                f"{facts.name}: Flutter constraint {facts.flutter_constraint} allows older SDKs — pin FVM or pubspec to {recommended} (recommended stable)",
                 facts.name,
                 facts.priority,
             )
@@ -379,7 +388,7 @@ def _flutter(facts: RepoFacts, requirements: dict, today: date) -> list[Finding]
         return [
             Finding(
                 "watch",
-                f"{facts.name}: no Flutter version pin; cannot compare to recommended stable {recommended}",
+                f"{facts.name}: no Flutter pin — set FVM or pubspec to {recommended} (recommended stable)",
                 facts.name,
                 facts.priority,
             )

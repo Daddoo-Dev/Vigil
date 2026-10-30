@@ -31,11 +31,15 @@ def test_write_app_bundle_creates_executable(tmp_path: Path):
 
 
 def test_scan_launch_agent_runs_monthly(tmp_path: Path):
+    from vigil.schedule import parse_schedule
+
     vigil = tmp_path / "vigil"
-    payload = scan_launch_agent_plist(vigil)
+    payload = scan_launch_agent_plist(vigil, parse_schedule("monthly"))
+    assert payload is not None
     assert payload["Label"] == "com.vigil.scan"
     assert payload["ProgramArguments"] == [str(vigil), "scan"]
     assert payload["StartCalendarInterval"]["Day"] == 1
+    assert scan_launch_agent_plist(vigil, parse_schedule("off")) is None
 
 
 def test_install_desktop_selects_macos(monkeypatch):

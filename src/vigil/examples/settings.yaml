@@ -8,3 +8,15 @@ notify: true
 # Extractor implementation. v1 ships "keyword" only.
 # A later local-LLM extractor can be selected here without changing scanners.
 extractor: keyword
+
+# Canary bump+build: verify every resolvable major as Ready or Blocked.
+# Scans are slow on purpose; a build failure on one app blocks that major
+# globally so the same noise is not repeated on every repo.
+# Vigil restores pubspec/lock afterward. probe_budget 0 = drain the whole queue.
+probe_builds: true
+probe_budget: 0
+
+# Automatic scan timer (rewritten by `vigil desktop` / `vigil schedule`).
+# weekly | biweekly | monthly | off | days
+schedule: monthly
+# every_days: 45   # only when schedule is days

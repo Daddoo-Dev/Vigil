@@ -71,6 +71,32 @@ def test_html_paragraphs_keep_requirement_text():
     assert "API level 36" in paragraphs[0]
 
 
+def test_html_table_rows_keep_deadline_with_policy_text():
+    html = """
+    <html><body><main>
+      <table>
+        <tr><th>Deadline (YYYY-MM-DD)</th><th>Policy change</th><th>Resources</th></tr>
+        <tr>
+          <td>2027-08-25</td>
+          <td>Local Network Permission: Apps targeting Android 17 or higher (API 37+) must submit a Play Console declaration.</td>
+          <td>PolicyBytes video</td>
+        </tr>
+        <tr>
+          <td>2027-01-27</td>
+          <td>Location Permissions policy requires the location button for infrequent precise location.</td>
+          <td>Help Center</td>
+        </tr>
+      </table>
+      <p>Intro text that is long enough to survive as its own paragraph after tables are removed.</p>
+    </main></body></html>
+    """
+    paragraphs = html_to_paragraphs(html)
+    assert paragraphs[0].startswith("2027-08-25: Local Network Permission")
+    assert "API 37+" in paragraphs[0]
+    assert paragraphs[1].startswith("2027-01-27: Location Permissions")
+    assert any("Intro text" in item for item in paragraphs)
+
+
 def test_flutter_json_ignores_artifact_hashes():
     body = """
     {"current_release":{"stable":"abc"},"releases":[

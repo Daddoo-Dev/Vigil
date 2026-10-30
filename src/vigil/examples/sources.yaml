@@ -2,8 +2,9 @@
 # requirements.yaml. keywords: an empty list uses the built-in phrases
 # (target api level, targetSdk, api level, Xcode, SDK, "must be built with",
 # deadline, required, minimum, deprecat, and "starting <month>").
+# iso-deadline-row matches HTML table rows normalized as "YYYY-MM-DD: …".
 #
-# URLs checked 2026-10-21:
+# URLs checked 2026-10-21 (play-policy-deadlines rechecked 2026-10-29):
 # - Apple news RSS returns 200, content-type application/rss+xml.
 # - Apple upcoming requirements returns 200 HTML.
 # - https://android-developers.googleblog.com/feeds/posts/default returns 302 to
@@ -11,6 +12,7 @@
 # - The Play Console help article returns 404 to HEAD and 200 to GET, and the
 #   body contains the target API text. Vigil always uses GET.
 # - The Android developers target-sdk page returns 200 HTML with the same policy.
+# - Play Policy Deadlines is a stable HTML table Google updates in place.
 # - Flutter releases_linux.json returns 200. Stable on that date was 3.47.7.
 # - Flutter and Dart GitHub release feeds return 200 Atom. They are fetched as
 #   type rss; feedparser reads both RSS and Atom.
@@ -44,6 +46,24 @@ sources:
     type: rss
     url: https://developer.android.com/static/blog/atom.xml
     keywords: *phrases
+
+  - id: play-policy-deadlines
+    name: Google Play Policy Deadlines
+    type: html
+    url: https://support.google.com/googleplay/android-developer/table/12921780
+    keywords: &play-deadlines
+      - iso-deadline-row
+      - permission
+      - declaration
+      - target api
+      - api level
+      - foreground service
+      - full-screen intent
+      - call log
+      - subscription
+      - must register
+      - must declare
+      - must submit
 
   - id: play-target-api
     name: Google Play target API level

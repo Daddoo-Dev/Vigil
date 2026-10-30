@@ -30,7 +30,10 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("init", help="create config directories and example files only")
     projects = commands.add_parser("projects", help="choose which projects in a folder to monitor")
     projects.add_argument("--dir", type=Path, help="folder to scan instead of the saved one")
-    commands.add_parser("scan", help="scan repos and sources, then write a report")
+    commands.add_parser(
+        "scan",
+        help="scan repos/sources and verify majors (slow; Ready vs Blocked bump advice)",
+    )
     commands.add_parser("review", help="accept or dismiss pending requirement proposals")
     commands.add_parser("status", help="print the latest status.json summary")
     open_cmd = commands.add_parser("open", help="open the latest report in your browser")
@@ -42,7 +45,16 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("tray", help="tray icon that opens reports and can start a scan")
     commands.add_parser(
         "desktop",
-        help="install the apps-grid launcher, tray autostart, and monthly timer",
+        help="install the apps-grid launcher, tray autostart, and scan timer",
+    )
+    schedule_cmd = commands.add_parser(
+        "schedule",
+        help="show or set the automatic scan schedule (weekly/biweekly/monthly/off/days N)",
+    )
+    schedule_cmd.add_argument(
+        "spec",
+        nargs="*",
+        help="weekly | biweekly | monthly | off | days <N>",
     )
     args = parser.parse_args(argv)
     paths = Paths.from_env()
@@ -97,6 +109,10 @@ def main(argv: list[str] | None = None) -> int:
             return run_tray(paths)
         if command == "desktop":
             return install_desktop_integration(quiet=False)
+        if command == "schedule":
+            from vigil.schedule_cmd import run_schedule
+
+            return run_schedule(paths, list(args.spec))
     except KeyboardInterrupt:
         return 130
     except Exception:

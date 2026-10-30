@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from dataclasses import dataclass
 
@@ -185,17 +186,52 @@ def html_to_paragraphs(html: str) -> list[str]:
     for tag in soup.find_all(["script", "style", "noscript", "svg", "nav", "header", "footer", "form", "iframe"]):
         tag.decompose()
     root = soup.find("main") or soup.find("article") or soup.body or soup
+    # Deadline tables keep date + policy text together; cell-by-cell parsing drops short date cells.
+    rows = _table_row_paragraphs(root)
+    for table in root.find_all("table"):
+        table.decompose()
     blocks = _block_paragraphs(root)
-    if len(blocks) >= 1:
-        return blocks
+    combined = rows + blocks
+    if combined:
+        return combined
     return _line_paragraphs(root)
+
+
+def _table_row_paragraphs(root) -> list[str]:
+    """Turn each data row into one paragraph: ``YYYY-MM-DD: policy change`` when possible."""
+    found: list[str] = []
+    seen: set[str] = set()
+    for table in root.find_all("table"):
+        for row in table.find_all("tr"):
+            cells = []
+            for cell in row.find_all(["th", "td"]):
+                text = " ".join(cell.get_text(" ", strip=True).split())
+                if text:
+                    cells.append(text)
+            if len(cells) < 2:
+                continue
+            first = cells[0]
+            if first.casefold().startswith("deadline"):
+                continue
+            policy = cells[1]
+            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", first) and policy:
+                text = f"{first}: {policy}"
+            else:
+                text = " — ".join(cells[:2])
+            if len(text) < 40 or text in seen:
+                continue
+            seen.add(text)
+            found.append(text)
+            if len(found) >= 500:
+                return found
+    return found
 
 
 def _block_paragraphs(root) -> list[str]:
     found: list[str] = []
     seen: set[str] = set()
-    for element in root.find_all(["h1", "h2", "h3", "p", "li", "td"]):
-        if element.find(["p", "li", "td", "h1", "h2", "h3"]):
+    for element in root.find_all(["h1", "h2", "h3", "p", "li"]):
+        if element.find(["p", "li", "h1", "h2", "h3"]):
             continue
         text = " ".join(element.get_text(" ", strip=True).split())
         if len(text) < 40 or text in seen:

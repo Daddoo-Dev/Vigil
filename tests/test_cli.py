@@ -11,6 +11,8 @@ def test_init_is_idempotent_and_ships_checked_sources(paths, capsys, monkeypatch
     sources = load_sources(paths.config_dir / "sources.yaml")
     by_id = {source.id: source for source in sources}
     assert by_id["android-blog"].url == "https://developer.android.com/static/blog/atom.xml"
+    assert by_id["play-policy-deadlines"].url.endswith("table/12921780")
+    assert "iso-deadline-row" in by_id["play-policy-deadlines"].keywords
     assert by_id["play-target-api"].url.endswith("11926878")
     assert by_id["flutter-stable"].type == "json"
     assert "target_api_min" in (paths.config_dir / "requirements.yaml").read_text(encoding="utf-8")

@@ -13,10 +13,47 @@ def test_outdated_json_flags_major_discontinued_and_retracted():
     rows = {item.name: item for item in parse_outdated(payload)}
     assert rows["http"].is_outdated is True
     assert rows["http"].major_behind is False
+    assert rows["http"].solver_blocked is False
     assert rows["old_tool"].discontinued is True
     assert rows["old_tool"].retracted is True
     assert rows["old_tool"].major_behind is True
     assert rows["transitive_one"].kind == "transitive"
+
+
+def test_solver_blocked_and_resolvable_major_upgrade():
+    blocked = parse_outdated(
+        {
+            "packages": [
+                {
+                    "package": "flutter_secure_storage",
+                    "kind": "direct",
+                    "current": {"version": "10.3.4"},
+                    "upgradable": {"version": "10.3.4"},
+                    "resolvable": {"version": "10.3.4"},
+                    "latest": {"version": "11.2.0"},
+                }
+            ]
+        }
+    )[0]
+    assert blocked.solver_blocked is True
+    assert blocked.resolvable_major_upgrade is False
+
+    open_upgrade = parse_outdated(
+        {
+            "packages": [
+                {
+                    "package": "file_picker",
+                    "kind": "direct",
+                    "current": {"version": "10.3.10"},
+                    "upgradable": {"version": "10.3.10"},
+                    "resolvable": {"version": "13.3.0"},
+                    "latest": {"version": "13.3.0"},
+                }
+            ]
+        }
+    )[0]
+    assert open_upgrade.solver_blocked is False
+    assert open_upgrade.resolvable_major_upgrade is True
 
 
 def test_lock_versions():

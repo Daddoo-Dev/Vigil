@@ -1,5 +1,7 @@
+# Default packaging copy. `vigil desktop` / `vigil schedule` overwrite this
+# from settings.yaml (weekly | biweekly | monthly | off | days + every_days).
 [Unit]
-Description=Run the Vigil maintenance scan every month
+Description=Run the Vigil maintenance scan (monthly)
 
 [Timer]
 OnCalendar=monthly

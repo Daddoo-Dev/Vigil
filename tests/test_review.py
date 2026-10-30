@@ -49,6 +49,39 @@ def test_accept_writes_requirements_and_verifies_the_date(paths):
     assert any("2026-10-21" in line for line in lines)
 
 
+def test_accept_prefills_suggested_deadline(paths):
+    write_yaml(paths.config_dir / "requirements.yaml", {})
+    write_yaml(
+        paths.config_dir / "requirements.pending.yaml",
+        {
+            "proposals": [
+                {
+                    "id": "def",
+                    "source_id": "play-policy-deadlines",
+                    "found_at": "2026-10-29",
+                    "quote": "2027-08-25: Apps targeting Android 17 (API 37+) must declare local network use.",
+                    "snippet_url": "https://example.test/deadlines",
+                    "suggested_field": "android.target_api_min",
+                    "suggested_value": "37",
+                    "suggested_deadline": "2027-08-25",
+                    "status": "pending",
+                }
+            ]
+        },
+    )
+    lines: list[str] = []
+    run_review(
+        paths,
+        date(2026, 10, 29),
+        input_fn=_input(["a", "", "", ""]),
+        output_fn=lines.append,
+    )
+    requirements = load_requirements(paths.config_dir / "requirements.yaml")
+    assert requirements["android"]["target_api_min"]["value"] == 37
+    assert requirements["android"]["target_api_min"]["deadline"] == "2027-08-25"
+    assert any("suggested deadline: 2027-08-25" in line for line in lines)
+
+
 def test_skip_leaves_last_verified_unset(paths):
     write_yaml(paths.config_dir / "requirements.yaml", {})
     write_yaml(

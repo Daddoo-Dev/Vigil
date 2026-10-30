@@ -1,0 +1,8 @@
+# Package upgrade verdicts. Vigil writes these after solver/canary probes.
+# status: ready (safe bump) | blocked (skip) | cleared (history).
+# Only Ready majors appear in the weekend bump list.
+# Global blocked (e.g. file_picker major 13) suppresses that major on every app.
+#
+# holds: []
+
+holds: []

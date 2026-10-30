@@ -33,10 +33,16 @@ _MONTHS = (
 )
 _STARTING_MONTH = re.compile(rf"\bstarting\s+(?:{_MONTHS})\b", re.IGNORECASE)
 _LINK_LINE = re.compile(r"\nLink:\s*(\S+)\s*$")
+_ISO_DEADLINE_ROW = re.compile(r"^(\d{4}-\d{2}-\d{2})\s*:\s+")
 _API_LEVEL = re.compile(r"\bapi level\s+(\d+)\b", re.IGNORECASE)
+_API_SHORT = re.compile(r"\bAPI\s+(\d+)\+?\b")
 _XCODE = re.compile(r"\bxcode\s+(\d+(?:\.\d+)?)\b", re.IGNORECASE)
 _IOS_TARGET = re.compile(r"\bios\s+(\d+(?:\.\d+)?)\b", re.IGNORECASE)
 _FLUTTER_STABLE = re.compile(r"\bflutter sdk stable\s+(\d+(?:\.\d+){1,3})\b", re.IGNORECASE)
+_NOISE = re.compile(
+    r"try your keywords|narrow by|policybytes video|play academy|skip to content",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -45,6 +51,7 @@ class Candidate:
     snippet_url: str
     suggested_field: str | None = None
     suggested_value: str | None = None
+    suggested_deadline: str | None = None
 
 
 class Extractor(Protocol):
@@ -69,6 +76,8 @@ class KeywordExtractor:
         seen: set[str] = set()
         for paragraph in _paragraphs(changed_text):
             quote, link = _split_link(paragraph)
+            if _is_noise(quote):
+                continue
             if not _matches(quote, keywords):
                 continue
             key = re.sub(r"\s+", " ", quote).strip().casefold()
@@ -82,6 +91,7 @@ class KeywordExtractor:
                     snippet_url=link or source.url,
                     suggested_field=field,
                     suggested_value=value,
+                    suggested_deadline=_suggest_deadline(quote),
                 )
             )
         return found
@@ -100,11 +110,22 @@ def _split_link(paragraph: str) -> tuple[str, str | None]:
     return quote, match.group(1)
 
 
+def _is_noise(text: str) -> bool:
+    stripped = text.strip()
+    if len(stripped) < 40:
+        return True
+    return bool(_NOISE.search(stripped)) and len(stripped) < 120
+
+
 def _matches(text: str, keywords: tuple[str, ...]) -> bool:
     lowered = text.casefold()
     for keyword in keywords:
         if keyword == "starting-month":
             if _STARTING_MONTH.search(text):
+                return True
+            continue
+        if keyword == "iso-deadline-row":
+            if _ISO_DEADLINE_ROW.match(text):
                 return True
             continue
         if keyword.casefold() in lowered:
@@ -120,10 +141,21 @@ def _unique(pattern: re.Pattern[str], text: str) -> str | None:
     return None
 
 
+def _suggest_deadline(quote: str) -> str | None:
+    match = _ISO_DEADLINE_ROW.match(quote.strip())
+    if match:
+        return match.group(1)
+    return None
+
+
 def _suggest(quote: str) -> tuple[str | None, str | None]:
     lowered = quote.casefold()
     if "target api" in lowered or "targetsdk" in lowered or "api level" in lowered:
-        return "android.target_api_min", _unique(_API_LEVEL, quote)
+        return "android.target_api_min", _unique(_API_LEVEL, quote) or _unique(_API_SHORT, quote)
+    if re.search(r"\bAPI\s+\d+", quote) and (
+        "target" in lowered or "android" in lowered or "play" in lowered
+    ):
+        return "android.target_api_min", _unique(_API_SHORT, quote)
     if "xcode" in lowered:
         return "ios.min_xcode", _unique(_XCODE, quote)
     if "deployment target" in lowered or "iphoneos" in lowered:

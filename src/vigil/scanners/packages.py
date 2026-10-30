@@ -21,6 +21,7 @@ class OutdatedPackage:
     kind: str
     current: str | None
     upgradable: str | None
+    resolvable: str | None
     latest: str | None
     discontinued: bool
     retracted: bool
@@ -30,6 +31,21 @@ class OutdatedPackage:
     @property
     def is_outdated(self) -> bool:
         return bool(self.current and self.latest and self.current != self.latest)
+
+    @property
+    def solver_blocked(self) -> bool:
+        """True when even loosening this package's constraint cannot reach latest."""
+        return bool(self.latest and self.resolvable and self.resolvable != self.latest)
+
+    @property
+    def resolvable_major_upgrade(self) -> bool:
+        """True when a major bump is available and the solver says it can resolve."""
+        return bool(
+            self.major_behind
+            and self.latest
+            and self.resolvable
+            and self.resolvable == self.latest
+        )
 
 
 def parse_lock_versions(text: str) -> dict[str, str]:
@@ -75,6 +91,7 @@ def parse_outdated(payload: dict) -> list[OutdatedPackage]:
                 kind=str(row.get("kind") or "direct"),
                 current=current,
                 upgradable=_version_field(row.get("upgradable")),
+                resolvable=_version_field(row.get("resolvable")),
                 latest=latest,
                 discontinued=bool(row.get("isDiscontinued")),
                 retracted=bool(row.get("isCurrentRetracted")),

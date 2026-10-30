@@ -70,8 +70,10 @@ def run_setup(
         output_fn("Skipped scan. When you are ready: vigil scan && vigil open")
         return 0
 
-    output_fn("Scanning. The first run can take a few minutes and may list many proposals.")
-    output_fn("That is normal: review them later with `vigil review`.")
+    output_fn("Scanning. This can take a while: Vigil verifies each major dependency bump")
+    output_fn("so you only get Ready (safe to bump) or Blocked (skip) — quality over speed.")
+    output_fn("A failure on one app is shared across apps with the same major. Proposals are separate;")
+    output_fn("review those later with `vigil review`.")
     scan_fn = scan or (lambda: run_scan(paths))
     status = scan_fn()
     state = status.get("state") if isinstance(status, dict) else None

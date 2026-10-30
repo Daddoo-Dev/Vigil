@@ -35,6 +35,8 @@ def run_review(paths: Paths, today: date, input_fn=input, output_fn=print) -> No
             if proposal.suggested_value:
                 hint = f"{hint} = {proposal.suggested_value}"
             output_fn(f"suggested: {hint}")
+        if proposal.suggested_deadline:
+            output_fn(f"suggested deadline: {proposal.suggested_deadline}")
         while True:
             choice = input_fn("[a]ccept  [d]ismiss  [s]kip: ").strip().lower()
             if choice in {"a", "accept"}:
@@ -77,7 +79,8 @@ def _accept(requirements: dict, proposal, input_fn, output_fn) -> bool:
     if not value:
         output_fn("A value is required.")
         return False
-    deadline = input_fn("deadline YYYY-MM-DD (blank to skip): ").strip()
+    default_deadline = proposal.suggested_deadline or ""
+    deadline = input_fn(f"deadline YYYY-MM-DD [{default_deadline}]: ").strip() or default_deadline
     if deadline:
         try:
             date.fromisoformat(deadline)

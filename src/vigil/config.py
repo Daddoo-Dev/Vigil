@@ -12,6 +12,7 @@ from pathlib import Path
 import yaml
 
 from vigil.host import default_path_roots
+from vigil.schedule import ScanSchedule, parse_schedule
 
 logger = logging.getLogger("vigil.config")
 
@@ -21,6 +22,7 @@ EXAMPLE_FILES = (
     "requirements.yaml",
     "requirements.pending.yaml",
     "expiries.yaml",
+    "holds.yaml",
     "settings.yaml",
 )
 
@@ -100,6 +102,10 @@ class Settings:
     notify: bool = True
     extractor: str = "keyword"
     projects_dir: Path | None = None
+    probe_builds: bool = True
+    # 0 = drain the whole canary queue each scan (Ready vs Blocked for every major).
+    probe_budget: int = 0
+    schedule: ScanSchedule = ScanSchedule()
 
 
 def configure_logging(state_dir: Path, verbose: bool) -> None:
@@ -217,9 +223,31 @@ def load_settings(path: Path) -> Settings:
     extractor = str(data.get("extractor") or "keyword")
     if not isinstance(notify, bool):
         raise ConfigError("settings.yaml: notify must be true or false")
+    probe_builds = data.get("probe_builds", True)
+    if not isinstance(probe_builds, bool):
+        raise ConfigError("settings.yaml: probe_builds must be true or false")
+    probe_budget = data.get("probe_budget", 0)
+    if not isinstance(probe_budget, int) or isinstance(probe_budget, bool) or probe_budget < 0:
+        raise ConfigError(
+            "settings.yaml: probe_budget must be a non-negative integer (0 = verify all majors)"
+        )
     raw_dir = data.get("projects_dir")
     projects_dir = Path(str(raw_dir)).expanduser() if raw_dir else None
-    return Settings(notify=notify, extractor=extractor, projects_dir=projects_dir)
+    try:
+        schedule = parse_schedule(
+            str(data.get("schedule") or "monthly"),
+            data.get("every_days"),
+        )
+    except ValueError as exc:
+        raise ConfigError(f"settings.yaml: {exc}") from exc
+    return Settings(
+        notify=notify,
+        extractor=extractor,
+        projects_dir=projects_dir,
+        probe_builds=probe_builds,
+        probe_budget=probe_budget,
+        schedule=schedule,
+    )
 
 
 def example_text(name: str) -> str:
@@ -257,6 +285,30 @@ def set_projects_dir(path: Path, directory: Path) -> None:
         if text and not text.endswith("\n"):
             text += "\n"
         text += line
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def set_schedule(path: Path, schedule: ScanSchedule) -> None:
+    """Write ``schedule`` / ``every_days`` into settings.yaml, keeping other keys."""
+    text = path.read_text(encoding="utf-8") if path.is_file() else "notify: true\nextractor: keyword\n"
+    schedule_line = f"schedule: {schedule.kind}\n"
+    if re.search(r"(?m)^schedule:", text):
+        text = re.sub(r"(?m)^schedule:.*(?:\n|$)", schedule_line, text, count=1)
+    else:
+        if text and not text.endswith("\n"):
+            text += "\n"
+        text += schedule_line
+    if schedule.kind == "days" and schedule.every_days is not None:
+        days_line = f"every_days: {schedule.every_days}\n"
+        if re.search(r"(?m)^every_days:", text):
+            text = re.sub(r"(?m)^every_days:.*(?:\n|$)", days_line, text, count=1)
+        else:
+            if text and not text.endswith("\n"):
+                text += "\n"
+            text += days_line
+    elif re.search(r"(?m)^every_days:", text):
+        text = re.sub(r"(?m)^every_days:.*(?:\n|$)", "", text, count=1)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
 
